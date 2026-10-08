@@ -1,0 +1,7 @@
+{
+    email admin@itkam34.ru
+}
+
+{$SUBDOMAIN} {
+    reverse_proxy api:8000
+}
