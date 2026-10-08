@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+psycopg[binary]
+pydantic-settings
+pyjwt
+argon2-cffi
+httpx
+redis
+apscheduler
+asyncssh
+cryptography
+python-multipart
+email-validator
