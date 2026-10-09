@@ -188,3 +188,15 @@ class ProvisioningTask(Base):
         CheckConstraint("action in ('create','suspend','resume','delete')", name="task_action_ck"),
         CheckConstraint("status in ('pending','running','done','error')", name="task_status_ck"),
     )
+
+class ExternalIdentity(Base):
+    __tablename__ = "external_identities"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    external_id: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (
+        UniqueConstraint("provider", "external_id", name="uq_identity_provider_ext"),
+        Index("ix_identity_user", "user_id"),
+    )
