@@ -4,6 +4,7 @@ from argon2 import PasswordHasher
 
 from app.db import SessionLocal
 from app.models import User, Wallet
+from app.services import ledger
 
 
 def main():
@@ -25,7 +26,7 @@ def main():
     )
     db.add(user)
     db.flush()
-    db.add(Wallet(user_id=user.id, currency="RUB", balance_minor=0))
+    ledger.get_wallet(db, user.id)
     db.commit()
     print(f"Admin created: id={user.id}")
 

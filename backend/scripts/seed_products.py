@@ -8,6 +8,8 @@ PRODUCTS = [
      "unit": "minute", "price_minor": 100, "config": {"protocol": "wireguard"}},
     {"code": "vpn-openvpn-minute", "service_type": "vpn", "name": "OpenVPN (RU), поминутно",
      "unit": "minute", "price_minor": 100, "active": False, "config": {"protocol": "openvpn"}},
+    {"code": "vps-basic-month", "service_type": "vps", "name": "VPS базовый, месяц",
+     "unit": "month", "price_minor": 50000, "active": False, "config": {"type": "vps"}},
     {"code": "cctv-camera-month", "service_type": "cctv", "name": "Камера CCTV Cloud, месяц",
      "unit": "month", "price_minor": 50000, "active": False, "config": {"integration": "cctv-cloud"}},
 ]

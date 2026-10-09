@@ -14,3 +14,4 @@ def get_db():
         yield db
     finally:
         db.close()
+from app.models import Base  # noqa: F401  re-export for scripts
