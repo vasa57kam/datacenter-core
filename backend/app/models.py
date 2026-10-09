@@ -67,7 +67,7 @@ class Product(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     __table_args__ = (
-        CheckConstraint("service_type in ('vpn','cctv','hosting','storage','mail')", name="products_type_ck"),
+        CheckConstraint("service_type in ('vpn','vps','cctv','hosting','storage','mail')", name="products_type_ck"),
         CheckConstraint("unit in ('minute','month','one_time')", name="products_unit_ck"),
         CheckConstraint("price_minor >= 0", name="products_price_ck"),
     )
