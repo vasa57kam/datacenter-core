@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import require_internal_key
 from app.models import VpnNode
-from app.schemas import VpnUsagePayload
+from app.schemas.internal import VpnUsagePayload
 from app.services import usage
 
 router = APIRouter(prefix="/internal/v1/vpn", tags=["internal"])

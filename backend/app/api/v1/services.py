@@ -6,7 +6,7 @@ from app.adapters.vpn import get_adapter
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Product, ServiceInstance, User, VpnAccount, VpnNode
-from app.schemas import (
+from app.schemas.services import (
     CreateVpnServiceRequest, ServiceConfigOut, ServiceOut,
 )
 from app.services import ledger

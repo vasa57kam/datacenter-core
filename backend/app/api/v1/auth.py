@@ -6,7 +6,7 @@ from app.core import security
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User, Wallet
-from app.schemas import LoginRequest, RegisterRequest, TokenResponse, UserOut
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserOut
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 

@@ -3,7 +3,7 @@ import argparse
 from argon2 import PasswordHasher
 
 from app.db import SessionLocal
-from app.models import User, Wallet
+from app.models import User
 from app.services import ledger
 
 

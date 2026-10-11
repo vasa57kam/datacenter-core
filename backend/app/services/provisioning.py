@@ -60,11 +60,10 @@ async def run_task(db: Session, task: ProvisioningTask) -> None:
     ).scalar_one_or_none()
 
     adapter = get_adapter(node)
-    product = db.get(Product, service.product_id)
 
     try:
         if task.action == "create":
-            data = await adapter.create_account(db, service, product)
+            data = await adapter.create_account(db, service, None)
             account = VpnAccount(
                 service_instance_id=service.id,
                 node_id=node.id,
@@ -93,7 +92,7 @@ async def run_task(db: Session, task: ProvisioningTask) -> None:
             service.status = "terminated"
         task.status = "done"
         task.error = None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         task.status = "error"
         task.error = str(exc)
 

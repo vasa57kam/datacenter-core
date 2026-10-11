@@ -1,4 +1,4 @@
-.PHONY: build up down logs init admin seed backup
+.PHONY: build up down logs init admin seed backup status
 
 build:
 	docker compose build
@@ -22,4 +22,8 @@ seed:
 	docker compose run --rm api python scripts/seed_products.py
 
 backup:
-	docker compose exec -T db pg_dump -U billing billing > backup-$$(date +%F-%H%M).sql
+	docker compose exec -T db pg_dump -U billing billing | zstd -9 -o backup-$$(date +%F-%H%M).sql.zst
+
+status:
+	docker compose ps
+	curl -fsS http://127.0.0.1:8008/healthz || true

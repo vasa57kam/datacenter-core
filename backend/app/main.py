@@ -4,7 +4,7 @@ from app.api.internal import cctv as internal_cctv
 from app.api.internal import vpn as internal_vpn
 from app.api.v1 import admin, auth, products, services, wallet
 
-app = FastAPI(title="ITKAM34 Billing Core", version="0.2.0")
+app = FastAPI(title="ITKAM34 Billing Core", version="0.3.0")
 
 for router in (
     auth.router,

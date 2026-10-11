@@ -1,5 +1,4 @@
 import hmac
-import secrets
 
 import jwt
 from fastapi import Depends, Header, HTTPException

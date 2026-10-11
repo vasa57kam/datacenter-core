@@ -2,12 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core import security
 from app.db import get_db
 from app.deps import require_internal_key
-from app.models import (
-    ExternalIdentity, Product, ServiceInstance, User,
-)
+from app.models import ExternalIdentity, Product, ServiceInstance, User
 from app.schemas.internal import (
     CctvChargeRequest, CctvCreditRequest, CctvOrderRequest, CctvUserEnsureRequest,
 )
@@ -40,15 +37,20 @@ def _ensure_user(db: Session, username: str, email: str | None):
     mail = email or f"cctv-{username}@users.itkam34.local"
     user = User(
         email=mail,
-        password_hash=security.hash_password(security.new_uuid()),
+        password_hash=security_hash(),
         role="client",
     )
     db.add(user)
     db.flush()
-    db.add(ledger.get_wallet(db, user.id))
+    ledger.get_wallet(db, user.id)
     db.add(ExternalIdentity(provider="cctv", external_id=username, user_id=user.id))
     db.flush()
     return user, True
+
+
+def security_hash():
+    from app.core import security
+    return security.hash_password(security.new_uuid())
 
 
 @router.post("/users/ensure")

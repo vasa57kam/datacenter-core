@@ -189,6 +189,7 @@ class ProvisioningTask(Base):
         CheckConstraint("status in ('pending','running','done','error')", name="task_status_ck"),
     )
 
+
 class ExternalIdentity(Base):
     __tablename__ = "external_identities"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

@@ -14,8 +14,6 @@ from app.services import ipam
 
 
 class WireGuardSshAdapter(VpnAdapter):
-    """Управляет пирами wg0 через SSH-скрипт /usr/local/sbin/wg-peer."""
-
     async def _ssh_exec(self, cmd: str) -> str:
         key_data = security.decrypt_secret(self.node.ssh_key_enc)
         fd, path = tempfile.mkstemp(suffix=".key")

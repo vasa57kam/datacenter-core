@@ -2,8 +2,6 @@ from app.adapters.vpn.base import VpnAdapter
 
 
 class OpenVpnStubAdapter(VpnAdapter):
-    """Заглушка: полноценный OpenVPN-адаптер planned на спринт 2."""
-
     async def create_account(self, db, service, product) -> dict:
         raise NotImplementedError("OpenVPN adapter will be implemented in sprint 2")
 

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Product
-from app.schemas import ProductOut
+from app.schemas.products import ProductOut
 
 router = APIRouter(prefix="/api/v1/products", tags=["catalog"])
 

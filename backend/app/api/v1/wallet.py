@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import LedgerEntry, User
-from app.schemas import LedgerOut, WalletOut
+from app.schemas.wallet import LedgerOut, WalletOut
 from app.services import ledger
 
 router = APIRouter(prefix="/api/v1/wallet", tags=["wallet"])

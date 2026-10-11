@@ -1,41 +1,25 @@
 # datacenter-core
 
-Ядро биллинга дата-центра: поминутное списание, VPN-менеджер (3x-ui VLESS Reality, WireGuard, OpenVPN-заглушка), задел под мост к CCTV Cloud.
+Ядро биллинга дата-центра: поминутное списание, VPN-менеджер (3x-ui VLESS Reality,
+WireGuard SSH, OpenVPN-заглушка), мост к CCTV Cloud через internal API.
 
-## Принципы
-- Деньги только в копейках (`bigint`), никаких float.
-- Все списания через неизменяемый `ledger_entries` с `idempotency_key`.
-- Биллинг — источник правды по деньгам и статусам; VPN-ноды только выполняют команды.
-- VPN-секреты хранятся зашифрованными (Fernet).
-
-## Быстрый старт
+## Деплой одной командой
 ```bash
-cp .env.example .env && chmod 600 .env   # заполнить секреты
-make build
-make init
-make admin ADMIN_EMAIL=admin@itkam34.ru ADMIN_PASSWORD='StrongPass!'
-make seed
-make up
-curl http://127.0.0.1:8008/healthz
+git clone https://github.com/vasa57kam/datacenter-core.git && cd datacenter-core
+bash install.sh            # или: GIT_TOKEN=... bash install.sh для приватного репо
+./install.sh update        # обновление
+./install.sh backup        # ручной бэкап
+./install.sh status        # статус
 ```
 
-## 3x-ui (Нидерланды)
-1. `bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)`
-2. В панели создать inbound VLESS + Reality (tcp 443), запомнить его ID.
-3. Взять из Reality-настроек: `serverNames[0]` (sni), `publicKey` (pbk), `shortIds[0]` (sid).
-4. Добавить ноду через `POST /api/v1/admin/nodes`, в `extra` положить:
-   `{"inbound_id": 1, "sni": "...", "pbk": "...", "sid": "...", "fp": "firefox"}`.
+## Принципы
+- Деньги только в копейках (bigint), никаких float.
+- Все списания через неизменяемый ledger_entries с idempotency_key.
+- Биллинг — источник правды; ноды и внешние системы только выполняют команды.
+- VPN-секреты хранятся зашифрованными (Fernet).
+- 3x-ui >= 3.8: логин с cookie-сессией + заголовок X-CSRF-Token (адаптер умеет).
 
-API 3x-ui, которые использует адаптер (если версия панели отличается — правь `app/adapters/vpn/threexui.py`):
-- `POST /login`
-- `POST /panel/api/inbounds/addClient`
-- `GET  /panel/api/inbounds/get/{id}`
-- `POST /panel/api/inbounds/updateClient/{uuid}`
-- `POST /panel/api/inbounds/{id}/delClient/{uuid}`
-
-## WireGuard-узел (Россия)
-Нужен скрипт `/usr/local/sbin/wg-peer` (add/remove) и sudo для пользователя `wg-manager`
-(см. план спринта). Ключ SSH биллинга добавляется в ноду через `POST /api/v1/admin/nodes`.
-
-## Спринт 2 (не в этом MVP)
-Order/AuditLog, платёжные провайдеры, Next.js фронт, админ-UI, полноценный OpenVPN, мост CCTV.
+## API
+- /api/v1/* — клиенты и админ (JWT)
+- /internal/v1/* — ноды и CCTV (X-Internal-Key)
+- /docs — Swagger

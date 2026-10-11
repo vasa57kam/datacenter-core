@@ -10,3 +10,4 @@ venv/
 .DS_Store
 backend/*.egg-info/
 .pytest_cache/
+/data/

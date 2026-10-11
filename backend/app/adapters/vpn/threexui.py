@@ -1,45 +1,78 @@
 import json
+import re
 
 import httpx
 
 from app.adapters.vpn.base import VpnAdapter
 from app.core import security
 
+UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 billing-core/1.0"}
+CSRF_RE = re.compile(
+    r'name="csrf-token"\s+content="([^"]+)"|content="([^"]+)"\s+name="csrf-token"'
+)
+
 
 class ThreeXuiAdapter(VpnAdapter):
-    """Адаптер панели 3x-ui (VLESS Reality)."""
-
     def _base(self) -> str:
         return self.node.api_url.rstrip("/")
 
     def _password(self) -> str:
         return security.decrypt_secret(self.node.api_key_enc)
 
-    async def _client(self) -> httpx.AsyncClient:
+    def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             timeout=30,
             verify=self.node.extra.get("verify_tls", False),
+            headers=UA,
+            follow_redirects=True,
         )
 
-    async def _login(self, client: httpx.AsyncClient) -> None:
-        payload = {"username": self.node.api_user, "password": self._password()}
-        resp = await client.post(f"{self._base()}/login", json=payload)
-        if resp.status_code in (400, 404):
-            resp = await client.post(f"{self._base()}/login", data=payload)
-        resp.raise_for_status()
+    async def _login(self, client: httpx.AsyncClient) -> str:
+        page = await client.get(f"{self._base()}/panel/")
+        csrf = ""
+        m = CSRF_RE.search(page.text or "")
+        if m:
+            csrf = m.group(1) or m.group(2) or ""
+        user, pwd = self.node.api_user, self._password()
+        headers = {"Referer": f"{self._base()}/panel/", "X-CSRF-Token": csrf}
+        resp = await client.post(
+            f"{self._base()}/login",
+            json={"username": user, "password": pwd},
+            headers=headers,
+        )
+        if resp.status_code >= 400:
+            headers["X-XSRF-Token"] = csrf
+            resp = await client.post(
+                f"{self._base()}/login",
+                data={"username": user, "password": pwd},
+                headers=headers,
+            )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"3x-ui login failed: HTTP {resp.status_code} {resp.text[:200]}")
+        return csrf
 
-    async def _post(self, path: str, payload: dict | None = None) -> dict:
-        async with await self._client() as client:
-            await self._login(client)
-            resp = await client.post(f"{self._base()}{path}", json=payload or {})
-            resp.raise_for_status()
+    async def _post(self, path: str, payload: dict | None = None, csrf: str = "") -> dict:
+        async with self._client() as client:
+            if not csrf:
+                csrf = await self._login(client)
+            resp = await client.post(
+                f"{self._base()}{path}",
+                json=payload or {},
+                headers={"X-CSRF-Token": csrf},
+            )
+            if resp.status_code >= 400:
+                raise RuntimeError(f"3x-ui POST {path}: HTTP {resp.status_code} {resp.text[:200]}")
             return resp.json()
 
     async def _get(self, path: str) -> dict:
-        async with await self._client() as client:
-            await self._login(client)
-            resp = await client.get(f"{self._base()}{path}")
-            resp.raise_for_status()
+        async with self._client() as client:
+            csrf = await self._login(client)
+            resp = await client.get(
+                f"{self._base()}{path}",
+                headers={"X-CSRF-Token": csrf},
+            )
+            if resp.status_code >= 400:
+                raise RuntimeError(f"3x-ui GET {path}: HTTP {resp.status_code} {resp.text[:200]}")
             return resp.json()
 
     def _inbound_id(self) -> int:
@@ -64,11 +97,15 @@ class ThreeXuiAdapter(VpnAdapter):
         email = f"svc{service.id}@itkam34.ru"
         sub_id = security.new_sub_id()
         client_obj = self._client_obj(account_uuid, email, sub_id, True)
-
-        await self._post(
-            "/panel/api/inbounds/addClient",
-            {"id": self._inbound_id(), "settings": json.dumps({"clients": [client_obj]})},
-        )
+        async with self._client() as client:
+            csrf = await self._login(client)
+            resp = await client.post(
+                f"{self._base()}/panel/api/inbounds/addClient",
+                json={"id": self._inbound_id(), "settings": json.dumps({"clients": [client_obj]})},
+                headers={"X-CSRF-Token": csrf},
+            )
+            if resp.status_code >= 400:
+                raise RuntimeError(f"addClient: HTTP {resp.status_code} {resp.text[:200]}")
         return {
             "uuid": account_uuid,
             "username": email,

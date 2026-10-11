@@ -6,9 +6,8 @@ from app.core import security
 from app.db import get_db
 from app.deps import require_admin
 from app.models import Product, ProvisioningTask, UsageSession, User, VpnNode
-from app.schemas import (
-    AdminCreditRequest, AdminNodeRequest, AdminProductRequest, UserOut,
-)
+from app.schemas.admin import AdminCreditRequest, AdminNodeRequest, AdminProductRequest
+from app.schemas.auth import UserOut
 from app.services import ledger
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -75,9 +74,13 @@ def create_node(
 
 @router.get("/provisioning/tasks")
 def list_tasks(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return db.execute(select(ProvisioningTask).order_by(ProvisioningTask.id.desc()).limit(100)).scalars().all()
+    return db.execute(
+        select(ProvisioningTask).order_by(ProvisioningTask.id.desc()).limit(100)
+    ).scalars().all()
 
 
 @router.get("/usage-sessions")
 def list_sessions(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return db.execute(select(UsageSession).order_by(UsageSession.id.desc()).limit(100)).scalars().all()
+    return db.execute(
+        select(UsageSession).order_by(UsageSession.id.desc()).limit(100)
+    ).scalars().all()
