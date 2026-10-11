@@ -291,33 +291,38 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
     async def reject(self, request: Request) -> None:
         self._process(request, approve=False)
 
-    def _process(self, request: Request, approve: bool) -> None:
+    async def _process(self, request: Request, approve: bool) -> None:
         from app.services import ledger as _ledger
+        import asyncio
         pks = (request.query_params.get("pks") or "").split(",")
-        db = SessionLocal()
-        try:
-            for pk in pks:
-                if not pk.strip():
-                    continue
-                pr = db.get(PaymentRequest, int(pk))
-                if pr is None or pr.status != "pending":
-                    continue
-                if approve:
-                    wallet = _ledger.get_wallet(db, pr.user_id)
-                    _ledger.credit(
-                        db, wallet, pr.amount_minor,
-                        reason=f"payment_{pr.method}",
-                        entity_type="payment_request",
-                        entity_id=pr.id,
-                        idempotency_key=f"payreq:{pr.id}:approve",
-                    )
-                    pr.status = "approved"
-                else:
-                    pr.status = "rejected"
-                pr.processed_at = datetime.now(timezone.utc)
-            db.commit()
-        finally:
-            db.close()
+        
+        def process_sync():
+            db = SessionLocal()
+            try:
+                for pk in pks:
+                    if not pk.strip():
+                        continue
+                    pr = db.get(PaymentRequest, int(pk))
+                    if pr is None or pr.status != "pending":
+                        continue
+                    if approve:
+                        wallet = _ledger.get_wallet(db, pr.user_id)
+                        _ledger.credit(
+                            db, wallet, pr.amount_minor,
+                            reason=f"payment_{pr.method}",
+                            entity_type="payment_request",
+                            entity_id=pr.id,
+                            idempotency_key=f"payreq:{pr.id}:approve",
+                        )
+                        pr.status = "approved"
+                    else:
+                        pr.status = "rejected"
+                    pr.processed_at = datetime.now(timezone.utc)
+                db.commit()
+            finally:
+                db.close()
+        
+        await asyncio.to_thread(process_sync)
 
     name = "Заявка на пополнение"
     name_plural = "Заявки на пополнение"
