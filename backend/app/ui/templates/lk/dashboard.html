@@ -2,22 +2,31 @@
 {% block title %}Кабинет{% endblock %}
 {% block content %}
 <div class="card">
-  <div>Баланс</div>
+  <div class="money-label">Баланс</div>
   <div class="money">{{ (wallet.balance_minor / 100) | round(2) }} ₽</div>
 </div>
 
 <div class="card">
   <h3>Пополнить баланс</h3>
   <form method="post" action="/lk/topup">
-    <p>
-      <input name="amount" type="number" min="1" step="1" placeholder="Сумма, ₽" required style="width:140px">
-      <select name="method">
-        {% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
-      </select>
-      <button type="submit">Создать заявку</button>
-    </p>
+    <div class="form-row">
+      <div>
+        <label>Сумма, ₽</label>
+        <input name="amount" type="number" min="1" step="1" placeholder="100" required>
+      </div>
+      <div>
+        <label>Способ</label>
+        <select name="method">
+          {% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit">Создать заявку</button>
+      </div>
+    </div>
     <p class="note" id="topup-note">{{ notes['transfer'] }}</p>
-    <p><input name="comment" placeholder="Комментарий (необязательно)" style="width:100%"></p>
+    <label>Комментарий (необязательно)</label>
+    <input name="comment" placeholder="Email или детали платежа">
   </form>
   <script>
     const notes = {{ notes | tojson }};
@@ -26,6 +35,7 @@
     sel.addEventListener('change', () => { note.textContent = notes[sel.value] || ''; });
   </script>
   {% if payreqs %}
+  <h3 style="margin-top:24px">Заявки на пополнение</h3>
   <table>
     <tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th></tr>
     {% for p in payreqs %}
@@ -41,7 +51,11 @@
 </div>
 
 <div class="card">
-  <h3>Мои услуги <a href="/lk/order"><button style="float:right">+ Подключить услугу</button></a></h3>
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3>Мои услуги</h3>
+    <a href="/lk/order" class="btn">+ Подключить услугу</a>
+  </div>
+  {% if services %}
   <table>
     <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
     {% for s in services %}
@@ -49,39 +63,45 @@
       <td>{{ s.name }}</td>
       <td class="st-{{ s.status }}">{{ s.status | ru_status }}</td>
       <td>
-        <a href="/lk/services/{{ s.id }}/config">конфиг</a>
+        <a href="/lk/services/{{ s.id }}/config" class="btn secondary">Конфиг</a>
         {% if s.status == 'active' %}
         <form method="post" action="/lk/services/{{ s.id }}/suspend" style="display:inline">
-          <button>пауза</button>
+          <button class="secondary">Пауза</button>
         </form>
         {% elif s.status == 'suspended' %}
         <form method="post" action="/lk/services/{{ s.id }}/resume" style="display:inline">
-          <button>возобновить</button>
+          <button>Возобновить</button>
         </form>
         {% endif %}
       </td>
     </tr>
-    {% else %}
-    <tr><td colspan="3">Услуг пока нет — <a href="/lk/order">подключить первую</a></td></tr>
     {% endfor %}
   </table>
+  {% else %}
+  <div class="empty-state">
+    <p>Услуг пока нет</p>
+    <a href="/lk/order" class="btn" style="margin-top:16px">Подключить первую</a>
+  </div>
+  {% endif %}
 </div>
 
 <div class="card">
   <h3>Последние операции</h3>
+  {% if entries %}
   <table>
     <tr><th>Когда</th><th>Операция</th><th>Сумма</th><th>Баланс после</th><th>Назначение</th></tr>
     {% for e in entries %}
     <tr>
       <td>{{ e.created_at.strftime('%d.%m %H:%M') }}</td>
-      <td>{{ 'пополнение' if e.entry_type == 'credit' else 'списание' }}</td>
-      <td>{{ (e.amount_minor / 100) | round(2) }} ₽</td>
+      <td>{{ 'Пополнение' if e.entry_type == 'credit' else 'Списание' }}</td>
+      <td style="color:{{ '#3fb950' if e.amount_minor > 0 else '#f85149' }}">{{ (e.amount_minor / 100) | round(2) }} ₽</td>
       <td>{{ (e.balance_after_minor / 100) | round(2) }} ₽</td>
       <td>{{ e.reason }}</td>
     </tr>
-    {% else %}
-    <tr><td colspan="5">Операций пока нет</td></tr>
     {% endfor %}
   </table>
+  {% else %}
+  <div class="empty-state">Операций пока нет</div>
+  {% endif %}
 </div>
 {% endblock %}
