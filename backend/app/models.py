@@ -212,6 +212,7 @@ ServiceInstance.product = _rel("Product")
 LedgerEntry.wallet = _rel("Wallet")
 VpnAccount.service = _rel("ServiceInstance")
 UsageSession.account = _rel("VpnAccount")
+PaymentRequest.user = _rel("User")
 
 
 class PaymentRequest(Base):
