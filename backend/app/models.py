@@ -5,7 +5,7 @@ from sqlalchemy import (
     Index, Integer, Text, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, INET
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -33,6 +33,7 @@ class Wallet(Base):
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="RUB")
     balance_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    user = relationship("User")
     __table_args__ = (CheckConstraint("balance_minor >= 0", name="wallets_balance_non_negative"),)
 
 
@@ -49,6 +50,7 @@ class LedgerEntry(Base):
     idempotency_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     meta: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    wallet = relationship("Wallet")
     __table_args__ = (
         CheckConstraint("entry_type in ('credit','debit')", name="ledger_entry_type_ck"),
         Index("ix_ledger_wallet_created", "wallet_id", "created_at"),
@@ -85,6 +87,8 @@ class ServiceInstance(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    user = relationship("User")
+    product = relationship("Product")
     __table_args__ = (
         CheckConstraint(
             "status in ('pending','provisioning','active','suspended','terminated')",
@@ -128,7 +132,7 @@ class VpnAccount(Base):
     __tablename__ = "vpn_accounts"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     service_instance_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("service_instances.id"), unique=True, nullable=False
+        BigInteger, ForeignKey("service_instances.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     node_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("vpn_nodes.id"), nullable=False)
     protocol: Mapped[str] = mapped_column(Text, nullable=False)
@@ -141,6 +145,7 @@ class VpnAccount(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    service = relationship("ServiceInstance")
     __table_args__ = (
         CheckConstraint("status in ('pending','active','suspended','deleted')", name="account_status_ck"),
         UniqueConstraint("node_id", "ip_address", name="uq_account_node_ip"),
@@ -151,7 +156,7 @@ class UsageSession(Base):
     __tablename__ = "usage_sessions"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     service_instance_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("service_instances.id"), nullable=False)
-    vpn_account_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("vpn_accounts.id"), nullable=False)
+    vpn_account_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("vpn_accounts.id", ondelete="CASCADE"), nullable=False)
     node_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("vpn_nodes.id"), nullable=False)
     external_session_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -162,6 +167,7 @@ class UsageSession(Base):
     charged_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
+    account = relationship("VpnAccount")
     __table_args__ = (
         CheckConstraint("status in ('active','closed')", name="session_status_ck"),
         Index("ix_sessions_active", "status", "last_heartbeat_at"),
@@ -203,18 +209,6 @@ class ExternalIdentity(Base):
     )
 
 
-# ui-friendly relations (для форматтеров админки)
-from sqlalchemy.orm import relationship as _rel  # noqa: E402
-
-Wallet.user = _rel("User")
-ServiceInstance.user = _rel("User")
-ServiceInstance.product = _rel("Product")
-LedgerEntry.wallet = _rel("Wallet")
-VpnAccount.service = _rel("ServiceInstance")
-UsageSession.account = _rel("VpnAccount")
-PaymentRequest.user = _rel("User")
-
-
 class PaymentRequest(Base):
     __tablename__ = "payment_requests"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -225,6 +219,7 @@ class PaymentRequest(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    user = relationship("User")
     __table_args__ = (
         CheckConstraint("status in ('pending','approved','rejected')", name="payreq_status_ck"),
         CheckConstraint("amount_minor > 0", name="payreq_amount_ck"),
