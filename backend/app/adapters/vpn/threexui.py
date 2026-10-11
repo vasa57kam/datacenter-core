@@ -10,6 +10,10 @@ UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 billing-
 CSRF_RE = re.compile(
     r'name="csrf-token"\s+content="([^"]+)"|content="([^"]+)"\s+name="csrf-token"'
 )
+INBOUND_KEYS = (
+    "up", "down", "total", "remark", "enable", "expiryTime",
+    "listen", "port", "protocol", "streamSettings", "sniffing", "allocate",
+)
 
 
 class ThreeXuiAdapter(VpnAdapter):
@@ -51,32 +55,57 @@ class ThreeXuiAdapter(VpnAdapter):
             raise RuntimeError(f"3x-ui login failed: HTTP {resp.status_code} {resp.text[:200]}")
         return csrf
 
-    async def _post(self, path: str, payload: dict | None = None, csrf: str = "") -> dict:
-        async with self._client() as client:
-            if not csrf:
-                csrf = await self._login(client)
-            resp = await client.post(
-                f"{self._base()}{path}",
-                json=payload or {},
-                headers={"X-CSRF-Token": csrf},
-            )
-            if resp.status_code >= 400:
-                raise RuntimeError(f"3x-ui POST {path}: HTTP {resp.status_code} {resp.text[:200]}")
-            return resp.json()
+    async def _api_get(self, client, csrf: str, path: str) -> dict:
+        resp = await client.get(f"{self._base()}{path}", headers={"X-CSRF-Token": csrf})
+        if resp.status_code >= 400:
+            raise RuntimeError(f"3x-ui GET {path}: HTTP {resp.status_code} {resp.text[:200]}")
+        return resp.json()
 
-    async def _get(self, path: str) -> dict:
-        async with self._client() as client:
-            csrf = await self._login(client)
-            resp = await client.get(
-                f"{self._base()}{path}",
-                headers={"X-CSRF-Token": csrf},
-            )
-            if resp.status_code >= 400:
-                raise RuntimeError(f"3x-ui GET {path}: HTTP {resp.status_code} {resp.text[:200]}")
-            return resp.json()
+    async def _api_post(self, client, csrf: str, path: str, payload: dict) -> dict:
+        resp = await client.post(
+            f"{self._base()}{path}", json=payload, headers={"X-CSRF-Token": csrf}
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"3x-ui POST {path}: HTTP {resp.status_code} {resp.text[:200]}")
+        return resp.json()
 
     def _inbound_id(self) -> int:
         return int(self.node.extra["inbound_id"])
+
+    async def _get_inbound(self, client, csrf: str) -> dict:
+        data = await self._api_get(client, csrf, f"/panel/api/inbounds/get/{self._inbound_id()}")
+        obj = data.get("obj")
+        if obj is None:
+            data = await self._api_get(client, csrf, "/panel/api/inbounds/list")
+            for item in data.get("obj") or []:
+                if item.get("id") == self._inbound_id():
+                    obj = item
+                    break
+        if obj is None:
+            raise RuntimeError(f"inbound {self._inbound_id()} not found in panel")
+        return obj
+
+    @staticmethod
+    def _parse_settings(inbound: dict) -> dict:
+        settings = inbound.get("settings")
+        if isinstance(settings, str):
+            settings = json.loads(settings or "{}")
+        return settings or {}
+
+    async def _mutate_clients(self, mutator) -> None:
+        async with self._client() as client:
+            csrf = await self._login(client)
+            inbound = await self._get_inbound(client, csrf)
+            settings = self._parse_settings(inbound)
+            clients = mutator(settings.get("clients", []))
+            settings["clients"] = clients
+            payload = {k: inbound.get(k) for k in INBOUND_KEYS if k in inbound}
+            payload["settings"] = json.dumps(settings, ensure_ascii=False)
+            await self._api_post(
+                client, csrf,
+                f"/panel/api/inbounds/update/{self._inbound_id()}",
+                payload,
+            )
 
     def _client_obj(self, account_uuid: str, email: str, sub_id: str, enable: bool) -> dict:
         return {
@@ -92,20 +121,21 @@ class ThreeXuiAdapter(VpnAdapter):
             "reset": 0,
         }
 
+    @staticmethod
+    def _match(client: dict, account) -> bool:
+        return client.get("email") == account.username or client.get("id") == account.uuid
+
     async def create_account(self, db, service, product) -> dict:
         account_uuid = security.new_uuid()
         email = f"svc{service.id}@itkam34.ru"
         sub_id = security.new_sub_id()
-        client_obj = self._client_obj(account_uuid, email, sub_id, True)
-        async with self._client() as client:
-            csrf = await self._login(client)
-            resp = await client.post(
-                f"{self._base()}/panel/api/inbounds/addClient",
-                json={"id": self._inbound_id(), "settings": json.dumps({"clients": [client_obj]})},
-                headers={"X-CSRF-Token": csrf},
-            )
-            if resp.status_code >= 400:
-                raise RuntimeError(f"addClient: HTTP {resp.status_code} {resp.text[:200]}")
+        obj = self._client_obj(account_uuid, email, sub_id, True)
+
+        def add(clients):
+            clients = [c for c in clients if c.get("email") != email]
+            return clients + [obj]
+
+        await self._mutate_clients(add)
         return {
             "uuid": account_uuid,
             "username": email,
@@ -114,22 +144,26 @@ class ThreeXuiAdapter(VpnAdapter):
             "extra": {"sub_id": sub_id, "inbound_id": self._inbound_id()},
         }
 
-    async def _update_client(self, account, enable: bool) -> None:
-        sub_id = account.extra.get("sub_id", "")
-        client_obj = self._client_obj(account.uuid, account.username, sub_id, enable)
-        await self._post(
-            f"/panel/api/inbounds/updateClient/{account.uuid}",
-            {"id": self._inbound_id(), "settings": json.dumps({"clients": [client_obj]})},
-        )
-
     async def suspend_account(self, db, account) -> None:
-        await self._update_client(account, False)
+        def mut(clients):
+            for c in clients:
+                if self._match(c, account):
+                    c["enable"] = False
+            return clients
+        await self._mutate_clients(mut)
 
     async def resume_account(self, db, account) -> None:
-        await self._update_client(account, True)
+        def mut(clients):
+            for c in clients:
+                if self._match(c, account):
+                    c["enable"] = True
+            return clients
+        await self._mutate_clients(mut)
 
     async def delete_account(self, db, account) -> None:
-        await self._post(f"/panel/api/inbounds/{self._inbound_id()}/delClient/{account.uuid}")
+        def mut(clients):
+            return [c for c in clients if not self._match(c, account)]
+        await self._mutate_clients(mut)
 
     def render_config(self, db, account) -> dict:
         extra = self.node.extra
