@@ -125,12 +125,12 @@ class ProductAdmin(ModelView, model=Product):
         Product.config: "Доп. параметры (JSON)", Product.currency: "Валюта",
     }
     column_formatters = {
-        Product.price_minor: lambda m, a: rub(m.price_minor) + (" / мин" if m.unit == "minute" else " / мес" if m.unit == "month" else " разово"),
+        Product.price_minor: lambda m, a: rub(m.price_minor) + " / " + {"second": "сек", "minute": "мин", "hour": "ч", "day": "день", "month": "мес"}.get(m.unit, "раз"),
     }
     form_choices = {
         Product.service_type: [("vpn", "VPN"), ("vps", "VPS/серверы"), ("cctv", "Видеонаблюдение"),
                                ("hosting", "Хостинг"), ("storage", "Хранилище"), ("mail", "Почта")],
-        Product.unit: [("minute", "поминутно"), ("month", "помесячно"), ("one_time", "разовый платёж")],
+        Product.unit: [("second", "посекундно"), ("minute", "поминутно"), ("hour", "почасово"), ("day", "в день"), ("month", "помесячно"), ("one_time", "разовый платёж")],
     }
     can_delete = False
     name = "Продукт"

@@ -11,6 +11,8 @@ from app.models import (
 from app.services import ledger
 from app.services.provisioning import enqueue_task
 
+TICK_SECONDS = {"second": 1, "minute": 60}
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -81,20 +83,22 @@ def charge_active_sessions() -> None:
         for session in sessions:
             service = db.get(ServiceInstance, session.service_instance_id)
             product = db.get(Product, service.product_id)
-            if product is None or product.unit != "minute":
+            if product is None or product.unit not in TICK_SECONDS:
                 continue
 
+            tick = TICK_SECONDS[product.unit]
             wallet = ledger.get_wallet(db, service.user_id)
-            elapsed_minutes = int((utcnow() - session.started_at).total_seconds() // 60)
+            elapsed = int((utcnow() - session.started_at).total_seconds())
+            ticks = elapsed // tick
 
-            for minute in range(session.charged_minutes + 1, elapsed_minutes + 1):
-                key = f"usage:session:{session.id}:minute:{minute}"
+            for n in range(session.charged_minutes + 1, ticks + 1):
+                key = f"usage:session:{session.id}:tick:{n}"
                 try:
                     ledger.debit(
                         db,
                         wallet,
                         product.price_minor,
-                        reason="vpn_usage",
+                        reason=f"vpn_usage_{product.unit}",
                         entity_type="usage_session",
                         entity_id=session.id,
                         idempotency_key=key,
@@ -102,7 +106,7 @@ def charge_active_sessions() -> None:
                 except ledger.InsufficientFunds:
                     _suspend(db, service, session)
                     break
-                session.charged_minutes = minute
+                session.charged_minutes = n
                 session.cost_minor += product.price_minor
 
             db.commit()

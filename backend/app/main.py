@@ -7,8 +7,9 @@ from app.api.v1 import admin, auth, products, services, wallet
 from app.core.config import settings
 from app.ui import cabinet
 from app.ui.admin import setup_admin
+from app.ui.help import router as help_router
 
-app = FastAPI(title="ITKAM34 Billing Core", version="0.7.0")
+app = FastAPI(title="ITKAM34 Billing Core", version="0.7.1")
 
 app.add_middleware(
     SessionMiddleware,
@@ -27,6 +28,7 @@ for router in (
     internal_vpn.router,
     internal_cctv.router,
     cabinet.router,
+    help_router,
 ):
     app.include_router(router)
 

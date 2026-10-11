@@ -41,7 +41,7 @@
 </div>
 
 <div class="card">
-  <h3>Мои услуги</h3>
+  <h3>Мои услуги <a href="/lk/order"><button style="float:right">+ Подключить услугу</button></a></h3>
   <table>
     <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
     {% for s in services %}
@@ -62,7 +62,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="3">Услуг пока нет — выберите тариф на главной</td></tr>
+    <tr><td colspan="3">Услуг пока нет — <a href="/lk/order">подключить первую</a></td></tr>
     {% endfor %}
   </table>
 </div>

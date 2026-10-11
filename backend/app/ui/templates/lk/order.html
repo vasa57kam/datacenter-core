@@ -1,0 +1,30 @@
+{% extends "lk/base.html" %}
+{% block title %}Подключение услуги{% endblock %}
+{% block content %}
+<div class="card">
+  <h3>Подключить услугу</h3>
+  <form method="post" action="/lk/order">
+    <p>
+      <select name="product_id" style="min-width:320px">
+        {% for p in products %}
+        <option value="{{ p.id }}" {% if p.code == pre %}selected{% endif %}>
+          {{ p.name }} — {{ (p.price_minor / 100) | round(2) }} ₽ / {% if p.unit == 'second' %}сек{% elif p.unit == 'minute' %}мин{% elif p.unit == 'month' %}мес{% elif p.unit == 'hour' %}ч{% elif p.unit == 'day' %}день{% else %}раз{% endif %}
+          {% if p.service_type != 'vpn' %}(скоро: выдача вручную){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </p>
+    <p>
+      <select name="node_id" style="min-width:320px">
+        <option value="0">Сервер выбрать автоматически</option>
+        {% for n in nodes %}
+        <option value="{{ n.id }}">{{ n.name }} ({{ n.country }}, {{ n.protocol }})</option>
+        {% endfor %}
+      </select>
+    </p>
+    <p><input name="name" placeholder="Название услуги (необязательно)" style="min-width:320px"></p>
+    <button type="submit">Подключить</button>
+  </form>
+  <p class="note">Списание начинается с первой минуты/секунды фактического использования. Пауза и возобновление — в кабинете.</p>
+</div>
+{% endblock %}

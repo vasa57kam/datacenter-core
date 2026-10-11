@@ -9,7 +9,7 @@ CONSTRAINT_FIXES = [
        CHECK (service_type IN ('vpn','vps','cctv','hosting','storage','mail'))""",
     "ALTER TABLE products DROP CONSTRAINT IF EXISTS products_unit_ck",
     """ALTER TABLE products ADD CONSTRAINT products_unit_ck
-       CHECK (unit IN ('minute','month','one_time'))""",
+       CHECK (unit IN ('second','minute','hour','day','month','one_time'))""",
 ]
 
 

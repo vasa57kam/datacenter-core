@@ -194,6 +194,69 @@ def topup(
     return RedirectResponse("/lk/", status_code=303)
 
 
+@router.get("/order", response_class=HTMLResponse)
+def order_page(request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    products = db.execute(
+        select(Product).where(Product.active.is_(True))
+    ).scalars().all()
+    nodes = db.execute(
+        select(VpnNode).where(VpnNode.active.is_(True))
+    ).scalars().all()
+    pre = request.query_params.get("product", "")
+    return templates.TemplateResponse(request, "lk/order.html", {
+        "user": user, "products": products, "nodes": nodes, "pre": pre,
+    })
+
+
+@router.post("/order")
+def order_create(
+    request: Request,
+    product_id: int = Form(),
+    node_id: int = Form(0),
+    name: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    product = db.get(Product, product_id)
+    if product is None or not product.active:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    node = None
+    if product.service_type == "vpn":
+        proto = product.config.get("protocol")
+        if node_id:
+            candidate = db.get(VpnNode, node_id)
+            if candidate is not None and candidate.active and candidate.protocol == proto:
+                node = candidate
+        if node is None:
+            node = db.execute(
+                select(VpnNode).where(
+                    VpnNode.active.is_(True), VpnNode.protocol == proto
+                )
+            ).scalars().first()
+        if node is None:
+            return RedirectResponse("/lk/order", status_code=303)
+
+    service = ServiceInstance(
+        user_id=user.id,
+        product_id=product.id,
+        name=name.strip() or product.name,
+        status="provisioning" if node else "pending",
+        config={"node_id": node.id} if node else {},
+    )
+    db.add(service)
+    db.flush()
+    if node is not None:
+        enqueue_task(db, "service_instance", service.id, "create")
+    db.commit()
+    return RedirectResponse("/lk/", status_code=303)
+
+
 @router.get("/services/{service_id}/config", response_class=HTMLResponse)
 def service_config(service_id: int, request: Request, db: Session = Depends(get_db)):
     user = _current_user(db, request)
