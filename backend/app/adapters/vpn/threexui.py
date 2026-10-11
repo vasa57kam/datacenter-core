@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 
@@ -14,6 +15,9 @@ INBOUND_KEYS = (
     "up", "down", "total", "remark", "enable", "expiryTime",
     "listen", "port", "protocol", "streamSettings", "sniffing", "allocate",
 )
+
+_SESSIONS: dict[int, dict] = {}
+_LOCKS: dict[int, asyncio.Lock] = {}
 
 
 class ThreeXuiAdapter(VpnAdapter):
@@ -55,28 +59,43 @@ class ThreeXuiAdapter(VpnAdapter):
             raise RuntimeError(f"3x-ui login failed: HTTP {resp.status_code} {resp.text[:200]}")
         return csrf
 
-    async def _api_get(self, client, csrf: str, path: str) -> dict:
-        resp = await client.get(f"{self._base()}{path}", headers={"X-CSRF-Token": csrf})
-        if resp.status_code >= 400:
-            raise RuntimeError(f"3x-ui GET {path}: HTTP {resp.status_code} {resp.text[:200]}")
-        return resp.json()
+    async def _session(self) -> tuple[httpx.AsyncClient, str]:
+        node_id = self.node.id
+        lock = _LOCKS.setdefault(node_id, asyncio.Lock())
+        async with lock:
+            sess = _SESSIONS.get(node_id)
+            if sess is None:
+                client = self._client()
+                csrf = await self._login(client)
+                sess = {"client": client, "csrf": csrf}
+                _SESSIONS[node_id] = sess
+            return sess["client"], sess["csrf"]
 
-    async def _api_post(self, client, csrf: str, path: str, payload: dict) -> dict:
-        resp = await client.post(
-            f"{self._base()}{path}", json=payload, headers={"X-CSRF-Token": csrf}
+    async def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
+        client, csrf = await self._session()
+        resp = await client.request(
+            method, f"{self._base()}{path}",
+            json=payload, headers={"X-CSRF-Token": csrf},
         )
+        if resp.status_code in (401, 403):
+            csrf = await self._login(client)
+            _SESSIONS[self.node.id]["csrf"] = csrf
+            resp = await client.request(
+                method, f"{self._base()}{path}",
+                json=payload, headers={"X-CSRF-Token": csrf},
+            )
         if resp.status_code >= 400:
-            raise RuntimeError(f"3x-ui POST {path}: HTTP {resp.status_code} {resp.text[:200]}")
+            raise RuntimeError(f"3x-ui {method} {path}: HTTP {resp.status_code} {resp.text[:200]}")
         return resp.json()
 
     def _inbound_id(self) -> int:
         return int(self.node.extra["inbound_id"])
 
-    async def _get_inbound(self, client, csrf: str) -> dict:
-        data = await self._api_get(client, csrf, f"/panel/api/inbounds/get/{self._inbound_id()}")
+    async def _get_inbound(self) -> dict:
+        data = await self._request("GET", f"/panel/api/inbounds/get/{self._inbound_id()}")
         obj = data.get("obj")
         if obj is None:
-            data = await self._api_get(client, csrf, "/panel/api/inbounds/list")
+            data = await self._request("GET", "/panel/api/inbounds/list")
             for item in data.get("obj") or []:
                 if item.get("id") == self._inbound_id():
                     obj = item
@@ -93,19 +112,12 @@ class ThreeXuiAdapter(VpnAdapter):
         return settings or {}
 
     async def _mutate_clients(self, mutator) -> None:
-        async with self._client() as client:
-            csrf = await self._login(client)
-            inbound = await self._get_inbound(client, csrf)
-            settings = self._parse_settings(inbound)
-            clients = mutator(settings.get("clients", []))
-            settings["clients"] = clients
-            payload = {k: inbound.get(k) for k in INBOUND_KEYS if k in inbound}
-            payload["settings"] = json.dumps(settings, ensure_ascii=False)
-            await self._api_post(
-                client, csrf,
-                f"/panel/api/inbounds/update/{self._inbound_id()}",
-                payload,
-            )
+        inbound = await self._get_inbound()
+        settings = self._parse_settings(inbound)
+        settings["clients"] = mutator(settings.get("clients", []))
+        payload = {k: inbound.get(k) for k in INBOUND_KEYS if k in inbound}
+        payload["settings"] = json.dumps(settings, ensure_ascii=False)
+        await self._request("POST", f"/panel/api/inbounds/update/{self._inbound_id()}", payload)
 
     def _client_obj(self, account_uuid: str, email: str, sub_id: str, enable: bool) -> dict:
         return {
@@ -154,17 +166,15 @@ class ThreeXuiAdapter(VpnAdapter):
         await self._mutate_clients(mut)
 
     async def fetch_client_state(self, account) -> dict:
-        async with self._client() as client:
-            csrf = await self._login(client)
-            inbound = await self._get_inbound(client, csrf)
-            for c in self._parse_settings(inbound).get("clients", []):
-                if self._match(c, account):
-                    return {
-                        "enable": c.get("enable"),
-                        "expiryTime": c.get("expiryTime"),
-                        "up": c.get("up"),
-                        "down": c.get("down"),
-                    }
+        inbound = await self._get_inbound()
+        for c in self._parse_settings(inbound).get("clients", []):
+            if self._match(c, account):
+                return {
+                    "enable": c.get("enable"),
+                    "expiryTime": c.get("expiryTime"),
+                    "up": c.get("up"),
+                    "down": c.get("down"),
+                }
         return {}
 
     async def suspend_account(self, db, account) -> None:

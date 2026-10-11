@@ -10,6 +10,7 @@ from app.models import Product, ServiceInstance, VpnAccount, VpnNode
 from app.services import ledger
 
 CAP = timedelta(days=7)
+DRIFT_MS = 120_000  # дёргаем панель только если expiry уехал больше чем на 2 минуты
 
 
 def _now_ms() -> int:
@@ -17,8 +18,6 @@ def _now_ms() -> int:
 
 
 def sync_vless_limits() -> None:
-    """Пушит в 3x-ui оплаченный конверт минут: панель сама гасит клиента,
-    даже если биллинг лежит. После возвращения биллинга конверт пересчитывается."""
     db = SessionLocal()
     try:
         accounts = db.execute(
@@ -41,18 +40,26 @@ def sync_vless_limits() -> None:
             prepaid_minutes = wallet.balance_minor // product.price_minor
             delta = min(timedelta(minutes=int(prepaid_minutes)), CAP)
 
-            if service.status == "active" and account.status == "active":
+            active = service.status == "active" and account.status == "active"
+            if active:
                 expiry_ms = _now_ms() + int(delta.total_seconds() * 1000)
-                enable = True
             else:
                 expiry_ms = _now_ms() - 1000
-                enable = False
+
+            extra = account.extra or {}
+            last_expiry = extra.get("pushed_expiry")
+            last_enable = extra.get("pushed_enable")
+            if last_enable == active and last_expiry is not None \
+                    and abs(last_expiry - expiry_ms) < DRIFT_MS:
+                continue  # ничего не изменилось — панель не трогаем
 
             adapter = get_adapter(node)
             try:
-                asyncio.run(adapter.push_limits(account, expiry_ms, enable))
+                asyncio.run(adapter.push_limits(account, expiry_ms, active))
                 account.extra = {
-                    **(account.extra or {}),
+                    **extra,
+                    "pushed_expiry": expiry_ms,
+                    "pushed_enable": active,
                     "limits_synced_at": _now_ms(),
                     "prepaid_minutes": int(prepaid_minutes),
                 }
