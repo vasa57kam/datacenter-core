@@ -3,6 +3,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.internal import cctv as internal_cctv
 from app.api.internal import debug as internal_debug
+from app.api.internal import debug as internal_debug
 from app.api.internal import vpn as internal_vpn
 from app.api.v1 import admin, auth, products, services, wallet
 from app.core.config import settings
@@ -28,6 +29,7 @@ for router in (
     admin.router,
     internal_vpn.router,
     internal_cctv.router,
+    internal_debug.router,
     internal_debug.router,
     cabinet.router,
     help_router,
