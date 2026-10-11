@@ -31,7 +31,7 @@ services:
       redis:
         condition: service_started
     ports:
-      - "127.0.0.1:8008:8000"
+      - "8008:8000"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   worker:
@@ -45,6 +45,7 @@ services:
     command: python -m app.worker
 
   caddy:
+    profiles: ["standalone"]
     image: caddy:2-alpine
     container_name: billing-caddy
     restart: unless-stopped

@@ -40,7 +40,7 @@ ENV
   chmod 600 "${INSTALL_DIR}/.env"
 }
 deploy() {
-  compose up -d --build db redis api worker caddy
+  compose up -d --build db redis api worker
   for _ in $(seq 1 30); do compose exec -T db pg_isready -U billing -d billing >/dev/null 2>&1 && break; sleep 2; done
   compose run --rm api python scripts/init_db.py
   compose run --rm api python scripts/seed_products.py
