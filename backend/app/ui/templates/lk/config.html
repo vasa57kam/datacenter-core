@@ -1,0 +1,12 @@
+{% extends "lk/base.html" %}
+{% block title %}Конфиг услуги {{ service.id }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h3>{{ service.name }} · <span class="st-{{ service.status }}">{{ service.status }}</span></h3>
+  {% if link %}<p>Ссылка для клиента (v2rayNG / v2rayN / Shadowrocket):</p><pre>{{ link }}</pre>{% endif %}
+  {% if sub_url %}<p>Подписка:</p><pre>{{ sub_url }}</pre>{% endif %}
+  {% if conf %}<p>Конфиг:</p><pre>{{ conf }}</pre>{% endif %}
+  {% if not link and not sub_url and not conf %}<p>Конфиг ещё не выпущен (услуга не активна или аккаунт не создан).</p>{% endif %}
+  <p><a href="/lk/">← назад</a></p>
+</div>
+{% endblock %}

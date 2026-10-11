@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Кабинет{% endblock %} — ITKAM34</title>
+<style>
+ body{font-family:system-ui,sans-serif;margin:0;background:#0f172a;color:#e2e8f0}
+ header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#1e293b}
+ main{padding:20px;max-width:960px;margin:0 auto}
+ table{width:100%;border-collapse:collapse;background:#1e293b}
+ th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #334155;font-size:14px}
+ .card{background:#1e293b;border-radius:10px;padding:16px;margin-bottom:16px}
+ .money{font-size:28px;font-weight:700;color:#4ade80}
+ a{color:#7dd3fc}
+ button,input{padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
+ button{cursor:pointer}
+ .st-active{color:#4ade80}.st-suspended{color:#f87171}.st-provisioning{color:#facc15}
+ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <strong>ITKAM34 · кабинет</strong>
+  <span>
+    {% if user %}{{ user.email }}
+    <form method="post" action="/lk/logout" style="display:inline">
+      <button type="submit">Выйти</button>
+    </form>
+    {% endif %}
+  </span>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

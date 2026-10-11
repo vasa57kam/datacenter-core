@@ -1,0 +1,123 @@
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.adapters.vpn import get_adapter
+from app.core import security
+from app.db import get_db
+from app.models import LedgerEntry, ServiceInstance, User, VpnAccount, VpnNode
+from app.services import ledger
+from app.services.provisioning import enqueue_task
+
+router = APIRouter(prefix="/lk", tags=["lk"])
+templates = Jinja2Templates(directory="app/ui/templates")
+
+
+def _current_user(db: Session, request: Request):
+    uid = request.session.get("uid")
+    if not uid:
+        return None
+    return db.get(User, int(uid))
+
+
+def _own_service(db: Session, user: User, service_id: int) -> ServiceInstance:
+    service = db.get(ServiceInstance, service_id)
+    if service is None or service.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return service
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse("lk/login.html", {"request": request})
+
+
+@router.post("/login")
+def login(
+    request: Request,
+    email: str = Form(),
+    password: str = Form(),
+    db: Session = Depends(get_db),
+):
+    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is None or not security.verify_password(password, user.password_hash) \
+            or user.status != "active":
+        raise HTTPException(status_code=401, detail="Bad credentials")
+    request.session["uid"] = user.id
+    return RedirectResponse("/lk/", status_code=303)
+
+
+@router.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/lk/login", status_code=303)
+
+
+@router.get("/", response_class=HTMLResponse)
+def dashboard(request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    wallet = ledger.get_wallet(db, user.id)
+    entries = db.execute(
+        select(LedgerEntry)
+        .where(LedgerEntry.wallet_id == wallet.id)
+        .order_by(LedgerEntry.id.desc())
+        .limit(20)
+    ).scalars().all()
+    services = db.execute(
+        select(ServiceInstance).where(ServiceInstance.user_id == user.id)
+    ).scalars().all()
+    return templates.TemplateResponse("lk/dashboard.html", {
+        "request": request, "user": user, "wallet": wallet,
+        "entries": entries, "services": services,
+    })
+
+
+@router.get("/services/{service_id}/config", response_class=HTMLResponse)
+def service_config(service_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    service = _own_service(db, user, service_id)
+    account = db.execute(
+        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+    ).scalar_one_or_none()
+    link = sub_url = conf = None
+    if account is not None:
+        node = db.get(VpnNode, account.node_id)
+        cfg = get_adapter(node).render_config(db, account)
+        link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
+    return templates.TemplateResponse("lk/config.html", {
+        "request": request, "service": service,
+        "link": link, "sub_url": sub_url, "conf": conf,
+    })
+
+
+@router.post("/services/{service_id}/suspend")
+def service_suspend(service_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    service = _own_service(db, user, service_id)
+    service.status = "suspended"
+    enqueue_task(db, "service_instance", service.id, "suspend")
+    db.commit()
+    return RedirectResponse("/lk/", status_code=303)
+
+
+@router.post("/services/{service_id}/resume")
+def service_resume(service_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    service = _own_service(db, user, service_id)
+    wallet = ledger.get_wallet(db, user.id)
+    if wallet.balance_minor <= 0:
+        raise HTTPException(status_code=402, detail="Top up balance first")
+    service.status = "active"
+    enqueue_task(db, "service_instance", service.id, "resume")
+    db.commit()
+    return RedirectResponse("/lk/", status_code=303)

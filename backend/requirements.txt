@@ -12,3 +12,6 @@ asyncssh
 cryptography
 python-multipart
 email-validator
+sqladmin
+itsdangerous
+jinja2

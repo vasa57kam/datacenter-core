@@ -1,0 +1,12 @@
+{% extends "lk/base.html" %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<div class="card" style="max-width:360px;margin:60px auto">
+  <h2>Вход в кабинет</h2>
+  <form method="post" action="/lk/login">
+    <p><input name="email" type="email" placeholder="Email" required style="width:100%"></p>
+    <p><input name="password" type="password" placeholder="Пароль" required style="width:100%"></p>
+    <button type="submit">Войти</button>
+  </form>
+</div>
+{% endblock %}
