@@ -1,16 +1,12 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
-from sqladmin import Admin, ModelView
+from sqladmin import Admin, ModelView, action
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 
 from app.core import security
 from app.db import SessionLocal, engine
-from datetime import datetime, timezone
-
-from sqlalchemy import select as _select
-from sqladmin import action
-from starlette.responses import RedirectResponse
-
 from app.models import (
     LedgerEntry, PaymentRequest, Product, ProvisioningTask, ServiceInstance,
     UsageSession, User, VpnAccount, VpnNode, Wallet,
@@ -84,7 +80,6 @@ class WalletAdmin(ModelView, model=Wallet):
         Wallet.balance_minor: lambda m, a: rub(m.balance_minor),
         Wallet.user_id: lambda m, a: m.user.email if m.user else m.user_id,
     }
-    column_formatters = {Wallet.balance_minor: lambda m, a: rub(m.balance_minor)}
     can_create = False
     can_delete = False
     name = "Кошелёк"
@@ -279,7 +274,6 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
         self._process(request, approve=False)
 
     def _process(self, request: Request, approve: bool) -> None:
-        from app.db import SessionLocal
         from app.services import ledger as _ledger
         pks = (request.query_params.get("pks") or "").split(",")
         db = SessionLocal()
