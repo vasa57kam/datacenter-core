@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import re
 
@@ -139,7 +140,7 @@ class ThreeXuiAdapter(VpnAdapter):
 
     async def create_account(self, db, service, product) -> dict:
         account_uuid = security.new_uuid()
-        email = f"svc{service.id}@itkam34.ru"
+        email = f"u{service.user_id}_{hashlib.sha256(str(service.id).encode()).hexdigest()[:8]}@itkam34.ru"
         sub_id = security.new_sub_id()
         obj = self._client_obj(account_uuid, email, sub_id, True)
 

@@ -1,3 +1,5 @@
+import logging
+
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -10,6 +12,8 @@ from app.models import (
 )
 from app.services import ledger
 from app.services.provisioning import enqueue_task
+
+log = logging.getLogger(__name__)
 
 TICK_SECONDS = {"second": 1, "minute": 60}
 
@@ -74,6 +78,7 @@ def _suspend(db: Session, service: ServiceInstance, session: UsageSession) -> No
 
 
 def charge_active_sessions() -> None:
+    log.info('charge_active_sessions: tick start')
     db = SessionLocal()
     try:
         sessions = db.execute(
@@ -110,6 +115,7 @@ def charge_active_sessions() -> None:
                 session.cost_minor += product.price_minor
 
             db.commit()
+        log.info(f'charge_active_sessions: session {session.id} charged {ticks - session.charged_minutes} ticks, cost {product.price_minor * (ticks - session.charged_minutes)} minor')
     finally:
         db.close()
 
@@ -128,5 +134,6 @@ def close_stale_sessions() -> None:
             session.status = "closed"
             session.ended_at = session.last_heartbeat_at
         db.commit()
+        log.info(f'charge_active_sessions: session {session.id} charged {ticks - session.charged_minutes} ticks, cost {product.price_minor * (ticks - session.charged_minutes)} minor')
     finally:
         db.close()
