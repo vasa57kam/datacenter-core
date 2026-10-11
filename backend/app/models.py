@@ -201,3 +201,14 @@ class ExternalIdentity(Base):
         UniqueConstraint("provider", "external_id", name="uq_identity_provider_ext"),
         Index("ix_identity_user", "user_id"),
     )
+
+
+# ui-friendly relations (для форматтеров админки)
+from sqlalchemy.orm import relationship as _rel  # noqa: E402
+
+Wallet.user = _rel("User")
+ServiceInstance.user = _rel("User")
+ServiceInstance.product = _rel("Product")
+LedgerEntry.wallet = _rel("Wallet")
+VpnAccount.service = _rel("ServiceInstance")
+UsageSession.account = _rel("VpnAccount")

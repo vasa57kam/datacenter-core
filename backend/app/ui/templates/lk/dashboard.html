@@ -9,12 +9,11 @@
 <div class="card">
   <h3>Мои услуги</h3>
   <table>
-    <tr><th>ID</th><th>Название</th><th>Статус</th><th>Действия</th></tr>
+    <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
     {% for s in services %}
     <tr>
-      <td>{{ s.id }}</td>
       <td>{{ s.name }}</td>
-      <td class="st-{{ s.status }}">{{ s.status }}</td>
+      <td class="st-{{ s.status }}">{{ s.status | ru_status }}</td>
       <td>
         <a href="/lk/services/{{ s.id }}/config">конфиг</a>
         {% if s.status == 'active' %}
@@ -29,7 +28,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="4">Услуг пока нет</td></tr>
+    <tr><td colspan="3">Услуг пока нет — выберите тариф на главной</td></tr>
     {% endfor %}
   </table>
 </div>
@@ -37,13 +36,13 @@
 <div class="card">
   <h3>Последние операции</h3>
   <table>
-    <tr><th>Когда</th><th>Тип</th><th>Сумма, ₽</th><th>Баланс после</th><th>Назначение</th></tr>
+    <tr><th>Когда</th><th>Операция</th><th>Сумма</th><th>Баланс после</th><th>Назначение</th></tr>
     {% for e in entries %}
     <tr>
       <td>{{ e.created_at.strftime('%d.%m %H:%M') }}</td>
-      <td>{{ e.entry_type }}</td>
-      <td>{{ (e.amount_minor / 100) | round(2) }}</td>
-      <td>{{ (e.balance_after_minor / 100) | round(2) }}</td>
+      <td>{{ 'пополнение' if e.entry_type == 'credit' else 'списание' }}</td>
+      <td>{{ (e.amount_minor / 100) | round(2) }} ₽</td>
+      <td>{{ (e.balance_after_minor / 100) | round(2) }} ₽</td>
       <td>{{ e.reason }}</td>
     </tr>
     {% else %}

@@ -71,8 +71,12 @@ class UserAdmin(ModelView, model=User):
 class WalletAdmin(ModelView, model=Wallet):
     column_list = [Wallet.id, Wallet.user_id, Wallet.currency, Wallet.balance_minor]
     column_labels = {
-        Wallet.id: "№", Wallet.user_id: "Пользователь №", Wallet.currency: "Валюта",
+        Wallet.id: "№", Wallet.user_id: "Клиент", Wallet.currency: "Валюта",
         Wallet.balance_minor: "Баланс",
+    }
+    column_formatters = {
+        Wallet.balance_minor: lambda m, a: rub(m.balance_minor),
+        Wallet.user_id: lambda m, a: m.user.email if m.user else m.user_id,
     }
     column_formatters = {Wallet.balance_minor: lambda m, a: rub(m.balance_minor)}
     can_create = False
@@ -86,7 +90,7 @@ class LedgerAdmin(ModelView, model=LedgerEntry):
                    LedgerEntry.amount_minor, LedgerEntry.balance_after_minor,
                    LedgerEntry.reason, LedgerEntry.created_at]
     column_labels = {
-        LedgerEntry.id: "№", LedgerEntry.wallet_id: "Кошелёк №",
+        LedgerEntry.id: "№", LedgerEntry.wallet_id: "Клиент",
         LedgerEntry.entry_type: "Операция", LedgerEntry.amount_minor: "Сумма",
         LedgerEntry.balance_after_minor: "Баланс после", LedgerEntry.reason: "Назначение",
         LedgerEntry.created_at: "Когда",
@@ -96,6 +100,7 @@ class LedgerAdmin(ModelView, model=LedgerEntry):
         LedgerEntry.balance_after_minor: lambda m, a: rub(m.balance_after_minor),
         LedgerEntry.entry_type: lambda m, a: "приход" if m.entry_type == "credit" else "списание",
         LedgerEntry.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M:%S"),
+        LedgerEntry.wallet_id: lambda m, a: m.wallet.user.email if m.wallet and m.wallet.user else m.wallet_id,
     }
     can_create = False
     can_edit = False
@@ -130,13 +135,20 @@ class ServiceAdmin(ModelView, model=ServiceInstance):
     column_list = [ServiceInstance.id, ServiceInstance.user_id, ServiceInstance.name,
                    ServiceInstance.status, ServiceInstance.created_at]
     column_labels = {
-        ServiceInstance.id: "№", ServiceInstance.user_id: "Клиент №",
+        ServiceInstance.id: "№", ServiceInstance.user_id: "Клиент",
         ServiceInstance.product_id: "Продукт №", ServiceInstance.name: "Название услуги",
         ServiceInstance.status: "Статус", ServiceInstance.config: "Конфиг (JSON)",
         ServiceInstance.created_at: "Создана", ServiceInstance.updated_at: "Изменена",
     }
     form_choices = {ServiceInstance.status: STATUS_CHOICES}
-    column_formatters = {ServiceInstance.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M")}
+    column_formatters = {
+        ServiceInstance.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M"),
+        ServiceInstance.user_id: lambda m, a: m.user.email if m.user else m.user_id,
+        ServiceInstance.status: lambda m, a: {
+            "pending": "ожидает", "provisioning": "выдаётся", "active": "активна",
+            "suspended": "приостановлена", "terminated": "завершена",
+        }.get(m.status, m.status),
+    }
     name = "Услуга"
     name_plural = "Услуги клиентов (редактируемые)"
 
@@ -185,7 +197,7 @@ class UsageAdmin(ModelView, model=UsageSession):
                    UsageSession.ended_at, UsageSession.charged_minutes, UsageSession.cost_minor,
                    UsageSession.status]
     column_labels = {
-        UsageSession.id: "№", UsageSession.vpn_account_id: "VPN-аккаунт №",
+        UsageSession.id: "№", UsageSession.vpn_account_id: "Клиент в панели",
         UsageSession.started_at: "Начало", UsageSession.ended_at: "Конец",
         UsageSession.charged_minutes: "Списано минут", UsageSession.cost_minor: "Стоимость",
         UsageSession.rx_bytes: "Принято", UsageSession.tx_bytes: "Отдано",
@@ -197,6 +209,8 @@ class UsageAdmin(ModelView, model=UsageSession):
         UsageSession.tx_bytes: lambda m, a: mb(m.tx_bytes),
         UsageSession.started_at: lambda m, a: m.started_at.strftime("%d.%m %H:%M"),
         UsageSession.ended_at: lambda m, a: m.ended_at.strftime("%d.%m %H:%M") if m.ended_at else "—",
+        UsageSession.vpn_account_id: lambda m, a: m.account.username if m.account else m.vpn_account_id,
+        UsageSession.status: lambda m, a: "идёт" if m.status == "active" else "закрыта",
     }
     can_create = False
     can_edit = False
@@ -211,7 +225,7 @@ class TaskAdmin(ModelView, model=ProvisioningTask):
     column_labels = {
         ProvisioningTask.id: "№", ProvisioningTask.action: "Действие",
         ProvisioningTask.status: "Статус", ProvisioningTask.attempts: "Попыток",
-        ProvisioningTask.error: "Ошибка", ProvisioningTask.entity_id: "Объект №",
+        ProvisioningTask.error: "Ошибка", ProvisioningTask.entity_id: "Услуга №",
         ProvisioningTask.updated_at: "Обновлена",
     }
     form_choices = {

@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -16,6 +18,29 @@ from app.services.provisioning import enqueue_task
 router = APIRouter(prefix="/lk", tags=["lk"])
 public_router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/ui/templates")
+
+SESSION_LONG = 30 * 24 * 3600     # «запомнить меня»
+SESSION_SHORT = 12 * 3600         # без галочки — до конца дня
+
+RU_STATUS = {
+    "active": "активна",
+    "suspended": "приостановлена",
+    "provisioning": "выдаётся",
+    "pending": "ожидает",
+    "terminated": "завершена",
+    "closed": "закрыта",
+}
+templates.env.filters["ru_status"] = lambda s: RU_STATUS.get(s, s)
+
+
+def _session_alive(request: Request) -> bool:
+    exp = request.session.get("exp")
+    if not exp:
+        return False
+    if time.time() > int(exp):
+        request.session.clear()
+        return False
+    return True
 
 
 @public_router.get("/", response_class=HTMLResponse)
@@ -62,6 +87,7 @@ def login(
     request: Request,
     email: str = Form(),
     password: str = Form(),
+    remember: str = Form("on"),
     db: Session = Depends(get_db),
 ):
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
@@ -69,6 +95,7 @@ def login(
             or user.status != "active":
         raise HTTPException(status_code=401, detail="Bad credentials")
     request.session["uid"] = user.id
+    request.session["exp"] = int(time.time()) + (SESSION_LONG if remember == "on" else SESSION_SHORT)
     return RedirectResponse("/lk/", status_code=303)
 
 
@@ -79,10 +106,9 @@ def logout(request: Request):
 
 
 def _current_user(db: Session, request: Request):
-    uid = request.session.get("uid")
-    if not uid:
+    if not _session_alive(request):
         return None
-    return db.get(User, int(uid))
+    return db.get(User, int(request.session["uid"]))
 
 
 def _own_service(db: Session, user: User, service_id: int) -> ServiceInstance:
