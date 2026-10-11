@@ -6,8 +6,12 @@
   <p>VPN-серверы (VLESS Reality, WireGuard), облачное видеонаблюдение CCTV.<br>
      Без абонементов: платишь только за минуты фактического использования.</p>
   <p>
-    <a href="/lk/register"><button>Зарегистрироваться</button></a>
-    <a href="/lk/login"><button>Войти в кабинет</button></a>
+    {% if user %}
+      <a href="/lk/"><button>В мой кабинет</button></a>
+    {% else %}
+      <a href="/lk/register"><button>Зарегистрироваться</button></a>
+      <a href="/lk/login"><button>Войти в кабинет</button></a>
+    {% endif %}
   </p>
 </div>
 <div class="card">

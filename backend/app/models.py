@@ -212,3 +212,20 @@ ServiceInstance.product = _rel("Product")
 LedgerEntry.wallet = _rel("Wallet")
 VpnAccount.service = _rel("ServiceInstance")
 UsageSession.account = _rel("VpnAccount")
+
+
+class PaymentRequest(Base):
+    __tablename__ = "payment_requests"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    method: Mapped[str] = mapped_column(Text, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        CheckConstraint("status in ('pending','approved','rejected')", name="payreq_status_ck"),
+        CheckConstraint("amount_minor > 0", name="payreq_amount_ck"),
+        Index("ix_payreq_user", "user_id"),
+    )

@@ -5,9 +5,15 @@ from starlette.requests import Request
 
 from app.core import security
 from app.db import SessionLocal, engine
+from datetime import datetime, timezone
+
+from sqlalchemy import select as _select
+from sqladmin import action
+from starlette.responses import RedirectResponse
+
 from app.models import (
-    LedgerEntry, Product, ProvisioningTask, ServiceInstance, UsageSession,
-    User, VpnAccount, VpnNode, Wallet,
+    LedgerEntry, PaymentRequest, Product, ProvisioningTask, ServiceInstance,
+    UsageSession, User, VpnAccount, VpnNode, Wallet,
 )
 
 
@@ -240,6 +246,71 @@ class TaskAdmin(ModelView, model=ProvisioningTask):
     name_plural = "Задачи выдачи (provisioning)"
 
 
+class PaymentAdmin(ModelView, model=PaymentRequest):
+    column_list = [PaymentRequest.id, PaymentRequest.user_id, PaymentRequest.amount_minor,
+                   PaymentRequest.method, PaymentRequest.status, PaymentRequest.created_at]
+    column_labels = {
+        PaymentRequest.id: "№", PaymentRequest.user_id: "Клиент",
+        PaymentRequest.amount_minor: "Сумма", PaymentRequest.method: "Способ",
+        PaymentRequest.comment: "Комментарий", PaymentRequest.status: "Статус",
+        PaymentRequest.created_at: "Создана", PaymentRequest.processed_at: "Обработана",
+    }
+    column_formatters = {
+        PaymentRequest.amount_minor: lambda m, a: rub(m.amount_minor),
+        PaymentRequest.user_id: lambda m, a: m.user.email if m.user else m.user_id,
+        PaymentRequest.status: lambda m, a: {
+            "pending": "на проверке", "approved": "зачислено", "rejected": "отклонено",
+        }.get(m.status, m.status),
+        PaymentRequest.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M"),
+    }
+    form_choices = {
+        PaymentRequest.method: [("transfer", "перевод на карту"), ("cash", "наличные"), ("other", "другое")],
+    }
+    can_create = False
+    can_edit = False
+    can_delete = False
+
+    @action(name="approve", label="Одобрить и зачислить", confirmation_message="Зачислить платёж на баланс клиента?")
+    async def approve(self, request: Request) -> None:
+        self._process(request, approve=True)
+
+    @action(name="reject", label="Отклонить", confirmation_message="Отклонить заявку?")
+    async def reject(self, request: Request) -> None:
+        self._process(request, approve=False)
+
+    def _process(self, request: Request, approve: bool) -> None:
+        from app.db import SessionLocal
+        from app.services import ledger as _ledger
+        pks = (request.query_params.get("pks") or "").split(",")
+        db = SessionLocal()
+        try:
+            for pk in pks:
+                if not pk.strip():
+                    continue
+                pr = db.get(PaymentRequest, int(pk))
+                if pr is None or pr.status != "pending":
+                    continue
+                if approve:
+                    wallet = _ledger.get_wallet(db, pr.user_id)
+                    _ledger.credit(
+                        db, wallet, pr.amount_minor,
+                        reason=f"payment_{pr.method}",
+                        entity_type="payment_request",
+                        entity_id=pr.id,
+                        idempotency_key=f"payreq:{pr.id}:approve",
+                    )
+                    pr.status = "approved"
+                else:
+                    pr.status = "rejected"
+                pr.processed_at = datetime.now(timezone.utc)
+            db.commit()
+        finally:
+            db.close()
+
+    name = "Заявка на пополнение"
+    name_plural = "Заявки на пополнение"
+
+
 def setup_admin(app, secret_key: str) -> None:
     auth = AdminAuth(secret_key=secret_key)
     admin = Admin(
@@ -249,5 +320,5 @@ def setup_admin(app, secret_key: str) -> None:
         base_url="/admin",
     )
     for view in (UserAdmin, WalletAdmin, LedgerAdmin, ProductAdmin, ServiceAdmin,
-                 NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin):
+                 NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):
         admin.add_view(view)

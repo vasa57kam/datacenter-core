@@ -7,6 +7,40 @@
 </div>
 
 <div class="card">
+  <h3>Пополнить баланс</h3>
+  <form method="post" action="/lk/topup">
+    <p>
+      <input name="amount" type="number" min="1" step="1" placeholder="Сумма, ₽" required style="width:140px">
+      <select name="method">
+        {% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      </select>
+      <button type="submit">Создать заявку</button>
+    </p>
+    <p class="note" id="topup-note">{{ notes['transfer'] }}</p>
+    <p><input name="comment" placeholder="Комментарий (необязательно)" style="width:100%"></p>
+  </form>
+  <script>
+    const notes = {{ notes | tojson }};
+    const sel = document.querySelector('select[name=method]');
+    const note = document.getElementById('topup-note');
+    sel.addEventListener('change', () => { note.textContent = notes[sel.value] || ''; });
+  </script>
+  {% if payreqs %}
+  <table>
+    <tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th></tr>
+    {% for p in payreqs %}
+    <tr>
+      <td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td>
+      <td>{{ (p.amount_minor / 100) | round(2) }} ₽</td>
+      <td>{{ p.method }}</td>
+      <td class="{% if p.status == 'approved' %}st-active{% elif p.status == 'rejected' %}st-suspended{% else %}st-pending{% endif %}">{{ p.status | ru_payreq }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
   <h3>Мои услуги</h3>
   <table>
     <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>

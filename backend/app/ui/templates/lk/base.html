@@ -13,10 +13,11 @@
  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #334155;font-size:14px}
  .card{background:#1e293b;border-radius:10px;padding:16px;margin-bottom:16px}
  .money{font-size:28px;font-weight:700;color:#4ade80}
- button,input{padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
+ button,input,select,textarea{padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
  button{cursor:pointer}
- .st-active{color:#4ade80}.st-suspended{color:#f87171}.st-provisioning{color:#facc15}.st-terminated{color:#94a3b8}
+ .st-active{color:#4ade80}.st-suspended{color:#f87171}.st-provisioning{color:#facc15}.st-terminated{color:#94a3b8}.st-pending{color:#facc15}.st-closed{color:#94a3b8}
  pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:12px}
+ .note{font-size:13px;color:#94a3b8}
  h1{line-height:1.2}
 </style>
 </head>
@@ -25,7 +26,7 @@
   <a href="/"><strong>ITKAM34</strong></a>
   <span>
     {% if user %}
-      {{ user.email }}
+      <a href="/lk/">Кабинет</a> · {{ user.email }}
       <form method="post" action="/lk/logout" style="display:inline">
         <button type="submit">Выйти</button>
       </form>

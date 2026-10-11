@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,7 +11,7 @@ from app.adapters.vpn import get_adapter
 from app.core import security
 from app.db import get_db
 from app.models import (
-    LedgerEntry, Product, ServiceInstance, User, VpnAccount, VpnNode,
+    LedgerEntry, PaymentRequest, Product, ServiceInstance, User, VpnAccount, VpnNode,
 )
 from app.services import ledger
 from app.services.provisioning import enqueue_task
@@ -19,18 +20,28 @@ router = APIRouter(prefix="/lk", tags=["lk"])
 public_router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/ui/templates")
 
-SESSION_LONG = 30 * 24 * 3600     # «запомнить меня»
-SESSION_SHORT = 12 * 3600         # без галочки — до конца дня
+SESSION_LONG = 30 * 24 * 3600
+SESSION_SHORT = 12 * 3600
 
 RU_STATUS = {
-    "active": "активна",
-    "suspended": "приостановлена",
-    "provisioning": "выдаётся",
-    "pending": "ожидает",
-    "terminated": "завершена",
-    "closed": "закрыта",
+    "active": "активна", "suspended": "приостановлена", "provisioning": "выдаётся",
+    "pending": "ожидает", "terminated": "завершена", "closed": "закрыта",
 }
+RU_PAYREQ = {"pending": "на проверке", "approved": "зачислено", "rejected": "отклонено"}
 templates.env.filters["ru_status"] = lambda s: RU_STATUS.get(s, s)
+templates.env.filters["ru_payreq"] = lambda s: RU_PAYREQ.get(s, s)
+
+TOPUP_METHODS = [
+    ("transfer", "Перевод на карту"),
+    ("cash", "Наличные"),
+    ("other", "Другое"),
+]
+TOPUP_NOTES = {
+    "transfer": "Переведите сумму на карту Сбербанк по номеру +7 000 000-00-00 (Имя Фамилия). "
+                "В комментарии к переводу укажите ваш email — так мы быстрее найдём платёж.",
+    "cash": "Передайте наличные администратору; в комментарии укажите, когда и где.",
+    "other": "Опишите в комментарии способ оплаты — администратор свяжется с вами.",
+}
 
 
 def _session_alive(request: Request) -> bool:
@@ -43,12 +54,22 @@ def _session_alive(request: Request) -> bool:
     return True
 
 
+def _current_user(db: Session, request: Request):
+    if not _session_alive(request):
+        return None
+    uid = request.session.get("uid")
+    return db.get(User, int(uid)) if uid else None
+
+
 @public_router.get("/", response_class=HTMLResponse)
 def landing(request: Request, db: Session = Depends(get_db)):
     products = db.execute(
         select(Product).where(Product.active.is_(True))
     ).scalars().all()
-    return templates.TemplateResponse(request, "lk/landing.html", {"products": products})
+    user = _current_user(db, request)
+    return templates.TemplateResponse(
+        request, "lk/landing.html", {"products": products, "user": user}
+    )
 
 
 @router.get("/register", response_class=HTMLResponse)
@@ -78,8 +99,10 @@ def register(
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse(request, "lk/login.html", {})
+def login_page(request: Request, db: Session = Depends(get_db)):
+    if _current_user(db, request) is not None:
+        return RedirectResponse("/lk/", status_code=303)
+    return templates.TemplateResponse(request, "lk/login.html", {"error": None})
 
 
 @router.post("/login")
@@ -93,7 +116,10 @@ def login(
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None or not security.verify_password(password, user.password_hash) \
             or user.status != "active":
-        raise HTTPException(status_code=401, detail="Bad credentials")
+        return templates.TemplateResponse(
+            request, "lk/login.html",
+            {"error": "Неверный email или пароль"}, status_code=401,
+        )
     request.session["uid"] = user.id
     request.session["exp"] = int(time.time()) + (SESSION_LONG if remember == "on" else SESSION_SHORT)
     return RedirectResponse("/lk/", status_code=303)
@@ -103,12 +129,6 @@ def login(
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/lk/login", status_code=303)
-
-
-def _current_user(db: Session, request: Request):
-    if not _session_alive(request):
-        return None
-    return db.get(User, int(request.session["uid"]))
 
 
 def _own_service(db: Session, user: User, service_id: int) -> ServiceInstance:
@@ -133,9 +153,45 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     services = db.execute(
         select(ServiceInstance).where(ServiceInstance.user_id == user.id)
     ).scalars().all()
+    payreqs = db.execute(
+        select(PaymentRequest)
+        .where(PaymentRequest.user_id == user.id)
+        .order_by(PaymentRequest.id.desc())
+        .limit(10)
+    ).scalars().all()
     return templates.TemplateResponse(request, "lk/dashboard.html", {
-        "user": user, "wallet": wallet, "entries": entries, "services": services,
+        "user": user, "wallet": wallet, "entries": entries,
+        "services": services, "payreqs": payreqs,
+        "methods": TOPUP_METHODS, "notes": TOPUP_NOTES,
     })
+
+
+@router.post("/topup")
+def topup(
+    request: Request,
+    amount: str = Form(),
+    method: str = Form(),
+    comment: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    try:
+        rub_amount = float(amount.replace(",", "."))
+        amount_minor = int(round(rub_amount * 100))
+    except ValueError:
+        amount_minor = 0
+    if amount_minor <= 0:
+        return RedirectResponse("/lk/", status_code=303)
+    if method not in dict(TOPUP_METHODS):
+        method = "other"
+    db.add(PaymentRequest(
+        user_id=user.id, amount_minor=amount_minor, method=method,
+        comment=comment.strip() or None, status="pending",
+    ))
+    db.commit()
+    return RedirectResponse("/lk/", status_code=303)
 
 
 @router.get("/services/{service_id}/config", response_class=HTMLResponse)
