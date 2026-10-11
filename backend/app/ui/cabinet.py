@@ -7,31 +7,54 @@ from sqlalchemy.orm import Session
 from app.adapters.vpn import get_adapter
 from app.core import security
 from app.db import get_db
-from app.models import LedgerEntry, ServiceInstance, User, VpnAccount, VpnNode
+from app.models import (
+    LedgerEntry, Product, ServiceInstance, User, VpnAccount, VpnNode,
+)
 from app.services import ledger
 from app.services.provisioning import enqueue_task
 
 router = APIRouter(prefix="/lk", tags=["lk"])
+public_router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/ui/templates")
 
 
-def _current_user(db: Session, request: Request):
-    uid = request.session.get("uid")
-    if not uid:
-        return None
-    return db.get(User, int(uid))
+@public_router.get("/", response_class=HTMLResponse)
+def landing(request: Request, db: Session = Depends(get_db)):
+    products = db.execute(
+        select(Product).where(Product.active.is_(True))
+    ).scalars().all()
+    return templates.TemplateResponse(request, "lk/landing.html", {"products": products})
 
 
-def _own_service(db: Session, user: User, service_id: int) -> ServiceInstance:
-    service = db.get(ServiceInstance, service_id)
-    if service is None or service.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Service not found")
-    return service
+@router.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse(request, "lk/register.html", {"error": None})
+
+
+@router.post("/register")
+def register(
+    request: Request,
+    email: str = Form(),
+    password: str = Form(min_length=8),
+    db: Session = Depends(get_db),
+):
+    exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if exists is not None:
+        return templates.TemplateResponse(
+            request, "lk/register.html",
+            {"error": "Email уже зарегистрирован"}, status_code=409,
+        )
+    user = User(email=email, password_hash=security.hash_password(password))
+    db.add(user)
+    db.flush()
+    ledger.get_wallet(db, user.id)
+    db.commit()
+    return RedirectResponse("/lk/login", status_code=303)
 
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("lk/login.html", {"request": request})
+    return templates.TemplateResponse(request, "lk/login.html", {})
 
 
 @router.post("/login")
@@ -55,6 +78,20 @@ def logout(request: Request):
     return RedirectResponse("/lk/login", status_code=303)
 
 
+def _current_user(db: Session, request: Request):
+    uid = request.session.get("uid")
+    if not uid:
+        return None
+    return db.get(User, int(uid))
+
+
+def _own_service(db: Session, user: User, service_id: int) -> ServiceInstance:
+    service = db.get(ServiceInstance, service_id)
+    if service is None or service.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return service
+
+
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     user = _current_user(db, request)
@@ -70,9 +107,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     services = db.execute(
         select(ServiceInstance).where(ServiceInstance.user_id == user.id)
     ).scalars().all()
-    return templates.TemplateResponse("lk/dashboard.html", {
-        "request": request, "user": user, "wallet": wallet,
-        "entries": entries, "services": services,
+    return templates.TemplateResponse(request, "lk/dashboard.html", {
+        "user": user, "wallet": wallet, "entries": entries, "services": services,
     })
 
 
@@ -90,9 +126,8 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
         node = db.get(VpnNode, account.node_id)
         cfg = get_adapter(node).render_config(db, account)
         link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
-    return templates.TemplateResponse("lk/config.html", {
-        "request": request, "service": service,
-        "link": link, "sub_url": sub_url, "conf": conf,
+    return templates.TemplateResponse(request, "lk/config.html", {
+        "user": user, "service": service, "link": link, "sub_url": sub_url, "conf": conf,
     })
 
 

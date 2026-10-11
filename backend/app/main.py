@@ -8,11 +8,12 @@ from app.core.config import settings
 from app.ui import cabinet
 from app.ui.admin import setup_admin
 
-app = FastAPI(title="ITKAM34 Billing Core", version="0.6.0")
+app = FastAPI(title="ITKAM34 Billing Core", version="0.6.2")
 
 app.add_middleware(SessionMiddleware, secret_key=settings.jwt_secret)
 
 for router in (
+    cabinet.public_router,
     auth.router,
     products.router,
     wallet.router,
