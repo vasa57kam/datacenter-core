@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqladmin import Admin, ModelView, action
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
@@ -85,6 +86,9 @@ class WalletAdmin(ModelView, model=Wallet):
     name = "Кошелёк"
     name_plural = "Кошельки"
 
+    def list_query(self, request: Request):
+        return select(Wallet).options(selectinload(Wallet.user))
+
 
 class LedgerAdmin(ModelView, model=LedgerEntry):
     column_list = [LedgerEntry.id, LedgerEntry.wallet_id, LedgerEntry.entry_type,
@@ -108,6 +112,11 @@ class LedgerAdmin(ModelView, model=LedgerEntry):
     can_delete = False
     name = "Операция"
     name_plural = "Финансовый журнал (ledger)"
+
+    def list_query(self, request: Request):
+        return select(LedgerEntry).options(
+            selectinload(LedgerEntry.wallet).selectinload(Wallet.user)
+        )
 
 
 class ProductAdmin(ModelView, model=Product):
@@ -152,6 +161,9 @@ class ServiceAdmin(ModelView, model=ServiceInstance):
     }
     name = "Услуга"
     name_plural = "Услуги клиентов (редактируемые)"
+
+    def list_query(self, request: Request):
+        return select(ServiceInstance).options(selectinload(ServiceInstance.user))
 
 
 class NodeAdmin(ModelView, model=VpnNode):
@@ -219,6 +231,9 @@ class UsageAdmin(ModelView, model=UsageSession):
     name = "Сессия"
     name_plural = "Сессии использования"
 
+    def list_query(self, request: Request):
+        return select(UsageSession).options(selectinload(UsageSession.account))
+
 
 class TaskAdmin(ModelView, model=ProvisioningTask):
     column_list = [ProvisioningTask.id, ProvisioningTask.action, ProvisioningTask.status,
@@ -264,6 +279,9 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
     can_create = False
     can_edit = False
     can_delete = False
+
+    def list_query(self, request: Request):
+        return select(PaymentRequest).options(selectinload(PaymentRequest.user))
 
     @action(name="approve", label="Одобрить и зачислить", confirmation_message="Зачислить платёж на баланс клиента?")
     async def approve(self, request: Request) -> None:
