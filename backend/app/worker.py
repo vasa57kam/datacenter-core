@@ -1,7 +1,7 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.core.config import settings
-from app.services import provisioning, usage
+from app.services import provisioning, sync, usage
 
 scheduler = BlockingScheduler(timezone="UTC")
 
@@ -14,6 +14,11 @@ def charge_job():
 @scheduler.scheduled_job("interval", seconds=60)
 def stale_job():
     usage.close_stale_sessions()
+
+
+@scheduler.scheduled_job("interval", seconds=60)
+def sync_job():
+    sync.sync_vless_limits()
 
 
 @scheduler.scheduled_job("interval", seconds=settings.provisioning_interval_seconds)

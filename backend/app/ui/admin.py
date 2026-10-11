@@ -11,6 +11,23 @@ from app.models import (
 )
 
 
+def rub(value) -> str:
+    return f"{(value or 0) / 100:.2f} ₽"
+
+
+def mb(value) -> str:
+    return f"{(value or 0) / 1048576:.1f} МБ"
+
+
+STATUS_CHOICES = [
+    ("pending", "ожидает"),
+    ("provisioning", "выдаётся"),
+    ("active", "активна"),
+    ("suspended", "приостановлена"),
+    ("terminated", "завершена"),
+]
+
+
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
@@ -38,12 +55,26 @@ class AdminAuth(AuthenticationBackend):
 class UserAdmin(ModelView, model=User):
     column_list = [User.id, User.email, User.role, User.status, User.created_at]
     column_searchable_list = [User.email]
+    column_labels = {
+        User.id: "№", User.email: "Email (логин)", User.role: "Роль",
+        User.status: "Состояние", User.created_at: "Регистрация",
+    }
+    form_choices = {
+        User.role: [("client", "клиент"), ("admin", "админ"), ("manager", "менеджер"), ("master", "мастер")],
+        User.status: [("active", "активен"), ("blocked", "заблокирован")],
+    }
+    column_formatters = {User.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M")}
     name = "Пользователь"
     name_plural = "Пользователи"
 
 
 class WalletAdmin(ModelView, model=Wallet):
     column_list = [Wallet.id, Wallet.user_id, Wallet.currency, Wallet.balance_minor]
+    column_labels = {
+        Wallet.id: "№", Wallet.user_id: "Пользователь №", Wallet.currency: "Валюта",
+        Wallet.balance_minor: "Баланс",
+    }
+    column_formatters = {Wallet.balance_minor: lambda m, a: rub(m.balance_minor)}
     can_create = False
     can_delete = False
     name = "Кошелёк"
@@ -51,41 +82,99 @@ class WalletAdmin(ModelView, model=Wallet):
 
 
 class LedgerAdmin(ModelView, model=LedgerEntry):
-    column_list = [LedgerEntry.id, LedgerEntry.wallet_id, LedgerEntry.amount_minor,
-                   LedgerEntry.balance_after_minor, LedgerEntry.entry_type,
-                   LedgerEntry.reason, LedgerEntry.idempotency_key, LedgerEntry.created_at]
+    column_list = [LedgerEntry.id, LedgerEntry.wallet_id, LedgerEntry.entry_type,
+                   LedgerEntry.amount_minor, LedgerEntry.balance_after_minor,
+                   LedgerEntry.reason, LedgerEntry.created_at]
+    column_labels = {
+        LedgerEntry.id: "№", LedgerEntry.wallet_id: "Кошелёк №",
+        LedgerEntry.entry_type: "Операция", LedgerEntry.amount_minor: "Сумма",
+        LedgerEntry.balance_after_minor: "Баланс после", LedgerEntry.reason: "Назначение",
+        LedgerEntry.created_at: "Когда",
+    }
+    column_formatters = {
+        LedgerEntry.amount_minor: lambda m, a: ("+ " if m.entry_type == "credit" else "− ") + rub(abs(m.amount_minor)),
+        LedgerEntry.balance_after_minor: lambda m, a: rub(m.balance_after_minor),
+        LedgerEntry.entry_type: lambda m, a: "приход" if m.entry_type == "credit" else "списание",
+        LedgerEntry.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M:%S"),
+    }
     can_create = False
     can_edit = False
     can_delete = False
-    name = "Операция ledger"
-    name_plural = "Ledger (финансовый журнал)"
+    name = "Операция"
+    name_plural = "Финансовый журнал (ledger)"
 
 
 class ProductAdmin(ModelView, model=Product):
-    column_list = [Product.id, Product.code, Product.service_type, Product.unit,
-                   Product.price_minor, Product.active]
+    column_list = [Product.id, Product.name, Product.code, Product.service_type,
+                   Product.unit, Product.price_minor, Product.active]
+    column_labels = {
+        Product.id: "№", Product.name: "Название для клиента", Product.code: "Код (служебный)",
+        Product.service_type: "Тип услуги", Product.unit: "Тарификация",
+        Product.price_minor: "Цена", Product.active: "В продаже",
+        Product.config: "Доп. параметры (JSON)", Product.currency: "Валюта",
+    }
+    column_formatters = {
+        Product.price_minor: lambda m, a: rub(m.price_minor) + (" / мин" if m.unit == "minute" else " / мес" if m.unit == "month" else " разово"),
+    }
+    form_choices = {
+        Product.service_type: [("vpn", "VPN"), ("vps", "VPS/серверы"), ("cctv", "Видеонаблюдение"),
+                               ("hosting", "Хостинг"), ("storage", "Хранилище"), ("mail", "Почта")],
+        Product.unit: [("minute", "поминутно"), ("month", "помесячно"), ("one_time", "разовый платёж")],
+    }
+    can_delete = False
     name = "Продукт"
-    name_plural = "Продукты"
+    name_plural = "Продукты и тарифы"
 
 
 class ServiceAdmin(ModelView, model=ServiceInstance):
-    column_list = [ServiceInstance.id, ServiceInstance.user_id, ServiceInstance.product_id,
-                   ServiceInstance.name, ServiceInstance.status, ServiceInstance.created_at]
+    column_list = [ServiceInstance.id, ServiceInstance.user_id, ServiceInstance.name,
+                   ServiceInstance.status, ServiceInstance.created_at]
+    column_labels = {
+        ServiceInstance.id: "№", ServiceInstance.user_id: "Клиент №",
+        ServiceInstance.product_id: "Продукт №", ServiceInstance.name: "Название услуги",
+        ServiceInstance.status: "Статус", ServiceInstance.config: "Конфиг (JSON)",
+        ServiceInstance.created_at: "Создана", ServiceInstance.updated_at: "Изменена",
+    }
+    form_choices = {ServiceInstance.status: STATUS_CHOICES}
+    column_formatters = {ServiceInstance.created_at: lambda m, a: m.created_at.strftime("%d.%m.%Y %H:%M")}
     name = "Услуга"
-    name_plural = "Услуги"
+    name_plural = "Услуги клиентов (редактируемые)"
 
 
 class NodeAdmin(ModelView, model=VpnNode):
-    column_list = [VpnNode.id, VpnNode.code, VpnNode.country, VpnNode.protocol,
-                   VpnNode.api_kind, VpnNode.active]
+    column_list = [VpnNode.id, VpnNode.code, VpnNode.name, VpnNode.country,
+                   VpnNode.protocol, VpnNode.api_kind, VpnNode.active]
+    column_labels = {
+        VpnNode.id: "№", VpnNode.code: "Код ноды", VpnNode.name: "Название",
+        VpnNode.country: "Страна", VpnNode.protocol: "Протокол",
+        VpnNode.api_kind: "Тип управления", VpnNode.active: "Активна",
+        VpnNode.api_url: "URL панели", VpnNode.api_user: "Логин панели",
+        VpnNode.endpoint_host: "Хост для клиентов", VpnNode.endpoint_port: "Порт для клиентов",
+        VpnNode.subnet_cidr: "Подсеть WireGuard", VpnNode.public_key: "Публичный ключ сервера",
+        VpnNode.extra: "Доп. параметры (inbound_id, sni, pbk, sid…)",
+    }
+    form_choices = {
+        VpnNode.protocol: [("vless", "VLESS Reality"), ("wireguard", "WireGuard"), ("openvpn", "OpenVPN")],
+        VpnNode.api_kind: [("3xui", "панель 3x-ui"), ("ssh_wireguard", "SSH + wg-peer"), ("openvpn_api", "OpenVPN API"), ("manual", "вручную")],
+    }
     column_details_exclude_list = [VpnNode.api_key_enc, VpnNode.ssh_key_enc]
     name = "VPN-нода"
     name_plural = "VPN-ноды"
 
 
 class AccountAdmin(ModelView, model=VpnAccount):
-    column_list = [VpnAccount.id, VpnAccount.service_instance_id, VpnAccount.node_id,
-                   VpnAccount.protocol, VpnAccount.username, VpnAccount.status]
+    column_list = [VpnAccount.id, VpnAccount.username, VpnAccount.protocol,
+                   VpnAccount.status, VpnAccount.service_instance_id]
+    column_labels = {
+        VpnAccount.id: "№", VpnAccount.username: "Имя клиента в панели",
+        VpnAccount.protocol: "Протокол", VpnAccount.status: "Статус",
+        VpnAccount.service_instance_id: "Услуга №", VpnAccount.node_id: "Нода №",
+        VpnAccount.ip_address: "IP (WireGuard)", VpnAccount.public_key: "Публичный ключ",
+    }
+    form_choices = {
+        VpnAccount.status: [("pending", "ожидает"), ("active", "активен"),
+                            ("suspended", "приостановлен"), ("deleted", "удалён")],
+    }
     column_details_exclude_list = [VpnAccount.secret_enc]
     name = "VPN-аккаунт"
     name_plural = "VPN-аккаунты"
@@ -93,23 +182,48 @@ class AccountAdmin(ModelView, model=VpnAccount):
 
 class UsageAdmin(ModelView, model=UsageSession):
     column_list = [UsageSession.id, UsageSession.vpn_account_id, UsageSession.started_at,
-                   UsageSession.ended_at, UsageSession.charged_minutes,
-                   UsageSession.cost_minor, UsageSession.status]
+                   UsageSession.ended_at, UsageSession.charged_minutes, UsageSession.cost_minor,
+                   UsageSession.status]
+    column_labels = {
+        UsageSession.id: "№", UsageSession.vpn_account_id: "VPN-аккаунт №",
+        UsageSession.started_at: "Начало", UsageSession.ended_at: "Конец",
+        UsageSession.charged_minutes: "Списано минут", UsageSession.cost_minor: "Стоимость",
+        UsageSession.rx_bytes: "Принято", UsageSession.tx_bytes: "Отдано",
+        UsageSession.status: "Состояние",
+    }
+    column_formatters = {
+        UsageSession.cost_minor: lambda m, a: rub(m.cost_minor),
+        UsageSession.rx_bytes: lambda m, a: mb(m.rx_bytes),
+        UsageSession.tx_bytes: lambda m, a: mb(m.tx_bytes),
+        UsageSession.started_at: lambda m, a: m.started_at.strftime("%d.%m %H:%M"),
+        UsageSession.ended_at: lambda m, a: m.ended_at.strftime("%d.%m %H:%M") if m.ended_at else "—",
+    }
     can_create = False
     can_edit = False
     can_delete = False
-    name = "Сессия использования"
+    name = "Сессия"
     name_plural = "Сессии использования"
 
 
 class TaskAdmin(ModelView, model=ProvisioningTask):
-    column_list = [ProvisioningTask.id, ProvisioningTask.entity_type, ProvisioningTask.entity_id,
-                   ProvisioningTask.action, ProvisioningTask.status,
-                   ProvisioningTask.attempts, ProvisioningTask.error]
+    column_list = [ProvisioningTask.id, ProvisioningTask.action, ProvisioningTask.status,
+                   ProvisioningTask.attempts, ProvisioningTask.error, ProvisioningTask.updated_at]
+    column_labels = {
+        ProvisioningTask.id: "№", ProvisioningTask.action: "Действие",
+        ProvisioningTask.status: "Статус", ProvisioningTask.attempts: "Попыток",
+        ProvisioningTask.error: "Ошибка", ProvisioningTask.entity_id: "Объект №",
+        ProvisioningTask.updated_at: "Обновлена",
+    }
+    form_choices = {
+        ProvisioningTask.action: [("create", "создать"), ("suspend", "приостановить"),
+                                  ("resume", "возобновить"), ("delete", "удалить")],
+        ProvisioningTask.status: [("pending", "в очереди"), ("running", "выполняется"),
+                                  ("done", "готово"), ("error", "ошибка")],
+    }
     can_create = False
     can_delete = False
-    name = "Задача provisioning"
-    name_plural = "Задачи provisioning"
+    name = "Задача"
+    name_plural = "Задачи выдачи (provisioning)"
 
 
 def setup_admin(app, secret_key: str) -> None:

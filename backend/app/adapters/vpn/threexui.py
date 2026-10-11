@@ -144,13 +144,31 @@ class ThreeXuiAdapter(VpnAdapter):
             "extra": {"sub_id": sub_id, "inbound_id": self._inbound_id()},
         }
 
-    async def suspend_account(self, db, account) -> None:
+    async def push_limits(self, account, expiry_ms: int, enable: bool) -> None:
         def mut(clients):
             for c in clients:
                 if self._match(c, account):
-                    c["enable"] = False
+                    c["enable"] = enable
+                    c["expiryTime"] = expiry_ms
             return clients
         await self._mutate_clients(mut)
+
+    async def fetch_client_state(self, account) -> dict:
+        async with self._client() as client:
+            csrf = await self._login(client)
+            inbound = await self._get_inbound(client, csrf)
+            for c in self._parse_settings(inbound).get("clients", []):
+                if self._match(c, account):
+                    return {
+                        "enable": c.get("enable"),
+                        "expiryTime": c.get("expiryTime"),
+                        "up": c.get("up"),
+                        "down": c.get("down"),
+                    }
+        return {}
+
+    async def suspend_account(self, db, account) -> None:
+        await self.push_limits(account, 0, False)
 
     async def resume_account(self, db, account) -> None:
         def mut(clients):
