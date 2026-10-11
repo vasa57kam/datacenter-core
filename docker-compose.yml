@@ -31,7 +31,7 @@ services:
       redis:
         condition: service_started
     ports:
-      - "8008:8000"
+      - "127.0.0.1:8008:8000"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   worker:
@@ -49,7 +49,6 @@ services:
     container_name: billing-caddy
     restart: unless-stopped
     env_file: .env
-    profiles: ["standalone"]
     ports:
       - "80:80"
       - "443:443"
