@@ -89,6 +89,7 @@ class ServiceInstance(Base):
     )
     user = relationship("User")
     product = relationship("Product")
+    accounts = relationship("VpnAccount", back_populates="service", lazy="selectin")
     __table_args__ = (
         CheckConstraint(
             "status in ('pending','provisioning','active','suspended','terminated')",
@@ -145,7 +146,7 @@ class VpnAccount(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    service = relationship("ServiceInstance")
+    service = relationship("ServiceInstance", back_populates="accounts")
     __table_args__ = (
         CheckConstraint("status in ('pending','active','suspended','deleted')", name="account_status_ck"),
         UniqueConstraint("node_id", "ip_address", name="uq_account_node_ip"),

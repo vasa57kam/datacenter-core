@@ -1,110 +1,97 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.adapters.vpn import get_adapter
 from app.db import get_db
-from app.deps import get_current_user
-from app.models import Product, ServiceInstance, User, VpnAccount, VpnNode
-from app.schemas.services import (
-    CreateVpnServiceRequest, ServiceConfigOut, ServiceOut,
-)
-from app.services import ledger
+from app.deps import current_user
+from app.models import Product, ServiceInstance, User, VpnNode
 from app.services.provisioning import enqueue_task
 
 router = APIRouter(prefix="/api/v1/services", tags=["services"])
 
 
-def _get_own_service(db: Session, user: User, service_id: int) -> ServiceInstance:
-    service = db.get(ServiceInstance, service_id)
-    if service is None or service.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Service not found")
-    return service
+class CreateVpnService(BaseModel):
+    product_code: str
+    node_code: str | None = None
+    name: str | None = None
 
 
-@router.post("/vpn", response_model=ServiceOut, status_code=202)
+@router.post("/vpn")
 def create_vpn_service(
-    body: CreateVpnServiceRequest,
-    user: User = Depends(get_current_user),
+    payload: CreateVpnService,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    product = db.execute(
-        select(Product).where(Product.code == body.product_code, Product.active.is_(True))
-    ).scalar_one_or_none()
-    if product is None or product.service_type != "vpn":
+    product = db.query(Product).filter_by(code=payload.product_code, active=True).first()
+    if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-
-    node = db.execute(
-        select(VpnNode).where(VpnNode.code == body.node_code, VpnNode.active.is_(True))
-    ).scalar_one_or_none()
-    if node is None:
-        raise HTTPException(status_code=404, detail="Node not found")
-    if node.protocol != product.config.get("protocol"):
-        raise HTTPException(status_code=400, detail="Protocol mismatch")
-
+    
+    # Выбираем ноду
+    node = None
+    if payload.node_code:
+        node = db.query(VpnNode).filter_by(code=payload.node_code, active=True).first()
+        if not node:
+            raise HTTPException(status_code=404, detail=f"Node {payload.node_code} not found")
+    else:
+        # Автоматический выбор первой активной ноды нужного протокола
+        proto = product.config.get("protocol", "vless")
+        node = db.query(VpnNode).filter_by(protocol=proto, active=True).first()
+    
     service = ServiceInstance(
         user_id=user.id,
         product_id=product.id,
-        name=body.name or f"{product.name} @ {node.code}",
-        status="provisioning",
-        config={"node_id": node.id},
+        name=payload.name or f"{product.name} @ {node.code}" if node else product.name,
+        status="provisioning" if node else "pending",
+        config={"node_id": node.id} if node else {},
     )
     db.add(service)
     db.flush()
-    enqueue_task(db, "service_instance", service.id, "create")
+    
+    if node:
+        enqueue_task(db, "service_instance", service.id, "create")
+    
     db.commit()
-    return service
+    return {
+        "id": service.id,
+        "user_id": service.user_id,
+        "product_id": service.product_id,
+        "name": service.name,
+        "status": service.status,
+        "created_at": service.created_at.isoformat(),
+    }
 
 
-@router.get("", response_model=list[ServiceOut])
-def list_services(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.execute(
-        select(ServiceInstance).where(ServiceInstance.user_id == user.id)
-    ).scalars().all()
-
-
-@router.get("/{service_id}", response_model=ServiceOut)
-def get_service(service_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _get_own_service(db, user, service_id)
-
-
-@router.get("/{service_id}/config", response_model=ServiceConfigOut)
-def get_service_config(service_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    service = _get_own_service(db, user, service_id)
-    account = db.execute(
-        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
-    ).scalar_one_or_none()
-    if account is None:
-        raise HTTPException(status_code=409, detail="Account not provisioned yet")
+@router.get("/{service_id}/config")
+def get_service_config(
+    service_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    from app.adapters.vpn import get_adapter
+    
+    service = db.get(ServiceInstance, service_id)
+    if not service or service.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Service not found")
+    
+    if service.status == "provisioning":
+        raise HTTPException(status_code=202, detail="Still provisioning, try again in 15 seconds")
+    
+    account = service.accounts.first() if hasattr(service, 'accounts') else None
+    if not account:
+        from app.models import VpnAccount
+        account = db.query(VpnAccount).filter_by(service_instance_id=service.id).first()
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not provisioned yet")
+    
+    from app.models import VpnNode
     node = db.get(VpnNode, account.node_id)
     cfg = get_adapter(node).render_config(db, account)
-    return ServiceConfigOut(service_id=service.id, protocol=account.protocol, **cfg)
-
-
-@router.post("/{service_id}/suspend", response_model=ServiceOut)
-def suspend_service(service_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    service = _get_own_service(db, user, service_id)
-    service.status = "suspended"
-    enqueue_task(db, "service_instance", service.id, "suspend")
-    db.commit()
-    return service
-
-
-@router.post("/{service_id}/resume", response_model=ServiceOut)
-def resume_service(service_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    service = _get_own_service(db, user, service_id)
-    wallet = ledger.get_wallet(db, user.id)
-    if wallet.balance_minor <= 0:
-        raise HTTPException(status_code=402, detail="Top up balance first")
-    service.status = "active"
-    enqueue_task(db, "service_instance", service.id, "resume")
-    db.commit()
-    return service
-
-
-@router.delete("/{service_id}", status_code=202)
-def delete_service(service_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    service = _get_own_service(db, user, service_id)
-    enqueue_task(db, "service_instance", service.id, "delete")
-    db.commit()
-    return {"status": "delete scheduled"}
+    
+    return {
+        "service_id": service.id,
+        "account_username": account.username,
+        "link": cfg.get("link"),
+        "subscription_url": cfg.get("subscription_url"),
+        "config_text": cfg.get("config_text"),
+    }
