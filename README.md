@@ -23,3 +23,6 @@ ADMIN_EMAIL=you@example.com bash install.sh   # или: GIT_TOKEN=... для п�
 - /api/v1/* — клиенты и админ (JWT)
 - /internal/v1/* — ноды и CCTV (X-Internal-Key)
 - /docs — Swagger
+
+## Исправления  в 
+FIXES.md
