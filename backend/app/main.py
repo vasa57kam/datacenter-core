@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.internal import cctv as internal_cctv
-from app.api.internal import debug as internal_debug
 from app.api.internal import vpn as internal_vpn
 from app.api.v1 import admin, auth, products, services, wallet
 from app.core.config import settings
@@ -10,7 +9,7 @@ from app.ui import cabinet
 from app.ui.admin import setup_admin
 from app.ui.help import router as help_router
 
-app = FastAPI(title="ITKAM34 Billing Core", version="0.7.1")
+app = FastAPI(title="ITKAM34 Billing Core", version="0.7.3")
 
 app.add_middleware(
     SessionMiddleware,
@@ -28,7 +27,6 @@ for router in (
     admin.router,
     internal_vpn.router,
     internal_cctv.router,
-    internal_debug.router,
     cabinet.router,
     help_router,
 ):
