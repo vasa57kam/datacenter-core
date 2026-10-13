@@ -224,6 +224,18 @@ def topup(
     return RedirectResponse("/lk/", status_code=303)
 
 
+
+@router.post("/topup/{payreq_id}/cancel")
+def topup_cancel(payreq_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    pr = db.get(PaymentRequest, payreq_id)
+    if pr is not None and pr.user_id == user.id and pr.status == "pending":
+        db.delete(pr)
+        db.commit()
+    return RedirectResponse("/lk/", status_code=303)
+
 @router.get("/order", response_class=HTMLResponse)
 def order_page(request: Request, db: Session = Depends(get_db)):
     user = _current_user(db, request)

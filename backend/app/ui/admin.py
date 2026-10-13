@@ -307,7 +307,7 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
     }
     can_create = False
     can_edit = False
-    can_delete = False
+    can_delete = True
 
     def list_query(self, request: Request):
         return select(PaymentRequest).options(selectinload(PaymentRequest.user))
@@ -386,3 +386,20 @@ def setup_admin(app, secret_key: str) -> None:
     for view in (UserAdmin, WalletAdmin, LedgerAdmin, ProductAdmin, ServiceAdmin,
                  NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):
         admin.add_view(view)
+
+    try:
+        from sqladmin import BaseView
+        from starlette.responses import RedirectResponse as _Redirect
+
+        class HelpView(BaseView):
+            path = "/admin/help"
+            title = "База знаний"
+            icon = "fa fa-book"
+            methods = ["GET"]
+
+            async def dispatch(self, request):
+                return _Redirect("/admin-help", status_code=302)
+
+        admin.add_view(HelpView)
+    except Exception:
+        pass

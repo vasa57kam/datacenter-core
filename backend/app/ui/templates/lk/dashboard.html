@@ -37,13 +37,21 @@
   {% if payreqs %}
   <h3 style="margin-top:24px">Заявки на пополнение</h3>
   <table>
-    <tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th></tr>
+    <tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th><th></th></tr>
     {% for p in payreqs %}
     <tr>
       <td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td>
       <td>{{ (p.amount_minor / 100) | round(2) }} ₽</td>
       <td>{{ p.method }}</td>
       <td class="{% if p.status == 'approved' %}st-active{% elif p.status == 'rejected' %}st-suspended{% else %}st-pending{% endif %}">{{ p.status | ru_payreq }}</td>
+      <td>
+        {% if p.status == 'pending' %}
+        <form method="post" action="/lk/topup/{{ p.id }}/cancel" style="display:inline"
+              onsubmit="return confirm('Удалить заявку?')">
+          <button class="danger">Удалить</button>
+        </form>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table>
@@ -55,6 +63,7 @@
     <h3>Мои услуги</h3>
     <a href="/lk/order" class="btn">+ Подключить услугу</a>
   </div>
+  <p class="note">Оплата списывается только за минуты/секунды фактического подключения. Пауза и отказ останавливают списания.</p>
   {% if services %}
   <table>
     <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
@@ -72,10 +81,11 @@
         <form method="post" action="/lk/services/{{ s.id }}/resume" style="display:inline">
           <button>Возобновить</button>
         </form>
-        
+        {% endif %}
+        {% if s.status in ['active', 'suspended', 'pending', 'provisioning'] %}
         <form method="post" action="/lk/services/{{ s.id }}/delete" style="display:inline"
-              onsubmit="return confirm('Удалить услугу безвозвратно?')">
-          <button class="danger">Удалить</button>
+              onsubmit="return confirm('Отказаться от услуги? Аккаунт и конфиг будут удалены безвозвратно. Списанные средства не возвращаются.')">
+          <button class="danger">Отказаться</button>
         </form>
         {% endif %}
       </td>

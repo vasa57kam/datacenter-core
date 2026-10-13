@@ -167,6 +167,14 @@ class ThreeXuiAdapter(VpnAdapter):
             "down": traffic.get("down"),
         }
 
+    async def fetch_onlines(self) -> list[str]:
+        data = await self._request("POST", "/panel/api/clients/onlines", {})
+        return data.get("obj") or []
+
+    async def fetch_traffic(self, email: str) -> dict:
+        data = await self._request("GET", f"/panel/api/clients/traffic/{quote(email)}")
+        return data.get("obj") or {}
+
     def render_config(self, db, account) -> dict:
         extra = self.node.extra
         link = (

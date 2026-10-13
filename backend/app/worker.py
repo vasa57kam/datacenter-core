@@ -1,7 +1,7 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.core.config import settings
-from app.services import provisioning, sync, usage
+from app.services import provisioning, sync, usage, usage_agent
 
 scheduler = BlockingScheduler(timezone="UTC")
 
@@ -14,6 +14,11 @@ def charge_job():
 @scheduler.scheduled_job("interval", seconds=60, coalesce=True, max_instances=1)
 def stale_job():
     usage.close_stale_sessions()
+
+
+@scheduler.scheduled_job("interval", seconds=60, coalesce=True, max_instances=1)
+def usage_agent_job():
+    usage_agent.poll_node_usage()
 
 
 @scheduler.scheduled_job("interval", seconds=60, coalesce=True, max_instances=1)
