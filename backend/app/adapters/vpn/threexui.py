@@ -1,6 +1,6 @@
-import json
 import re
 import time
+from urllib.parse import quote
 
 import httpx
 
@@ -17,6 +17,8 @@ _AUTH_TTL = 600
 
 
 class ThreeXuiAdapter(VpnAdapter):
+    """3x-ui new-generation panel: clients are first-class entities (/panel/api/clients/*)."""
+
     def _base(self) -> str:
         return self.node.api_url.rstrip("/")
 
@@ -39,11 +41,10 @@ class ThreeXuiAdapter(VpnAdapter):
             m = CSRF_RE.search(page.text or "")
             if m:
                 csrf = m.group(1) or m.group(2) or ""
-            headers = {"Referer": f"{self._base()}/panel/", "X-CSRF-Token": csrf}
             resp = await client.post(
                 f"{self._base()}/login",
                 json={"username": self.node.api_user, "password": self._password()},
-                headers=headers,
+                headers={"Referer": f"{self._base()}/panel/", "X-CSRF-Token": csrf},
             )
             if resp.status_code >= 400:
                 raise RuntimeError(f"3x-ui login failed: HTTP {resp.status_code}")
@@ -83,43 +84,31 @@ class ThreeXuiAdapter(VpnAdapter):
     def _inbound_id(self) -> int:
         return int(self.node.extra["inbound_id"])
 
-    async def _get_clients(self) -> list[dict]:
-        data = await self._request("GET", f"/panel/api/inbounds/get/{self._inbound_id()}")
-        obj = data.get("obj") or {}
-        settings = obj.get("settings")
-        if isinstance(settings, str):
-            settings = json.loads(settings or "{}")
-        return (settings or {}).get("clients", []) or []
-
-    @staticmethod
-    def _match(client: dict, account) -> bool:
-        return client.get("email") == account.username or client.get("id") == account.uuid
-
-    def _client_obj(self, uuid: str, email: str, sub_id: str, enable: bool,
-                    expiry: int = 0) -> dict:
-        return {
-            "id": uuid,
-            "flow": "xtls-rprx-vision",
-            "email": email,
-            "limitIp": 0,
-            "totalGB": 0,
-            "expiryTime": expiry,
-            "enable": enable,
-            "tgId": "",
-            "subId": sub_id,
-            "reset": 0,
-        }
+    async def _get_client(self, email: str) -> dict | None:
+        data = await self._request("GET", f"/panel/api/clients/get/{quote(email)}")
+        return data.get("obj") or None
 
     async def create_account(self, db, service, product) -> dict:
         uuid = security.new_uuid()
         email = f"u{service.user_id}_{uuid[:8]}@itkam34.ru"
         sub_id = security.new_sub_id()
-        obj = self._client_obj(uuid, email, sub_id, True)
-        payload = {
-            "id": self._inbound_id(),
-            "settings": json.dumps({"clients": [obj]}, ensure_ascii=False),
+        client = {
+            "email": email,
+            "enable": True,
+            "expiryTime": 0,
+            "flow": "xtls-rprx-vision",
+            "id": uuid,
+            "limitIp": 0,
+            "subId": sub_id,
+            "totalGB": 0,
+            "reset": 0,
+            "tgId": 0,
+            "comment": f"billing svc {service.id}",
         }
-        await self._request("POST", "/panel/api/inbounds/addClient", payload)
+        await self._request(
+            "POST", "/panel/api/clients/add",
+            {"client": client, "inboundIds": [self._inbound_id()]},
+        )
         return {
             "uuid": uuid,
             "username": email,
@@ -128,48 +117,55 @@ class ThreeXuiAdapter(VpnAdapter):
             "extra": {"sub_id": sub_id, "inbound_id": self._inbound_id()},
         }
 
-    async def _update_client(self, account, mutator) -> None:
-        clients = await self._get_clients()
-        target = next((c for c in clients if self._match(c, account)), None)
-        if target is None:
-            raise RuntimeError(f"client {account.username} not found in inbound {self._inbound_id()}")
-        target = mutator(dict(target))
-        payload = {
-            "id": self._inbound_id(),
-            "settings": json.dumps({"clients": [target]}, ensure_ascii=False),
-        }
-        await self._request("POST", f"/panel/api/inbounds/updateClient/{account.uuid}", payload)
-
-    async def push_limits(self, account, expiry_ms: int, enable: bool) -> None:
-        def mut(c):
-            c["enable"] = enable
-            c["expiryTime"] = expiry_ms
-            return c
-        await self._update_client(account, mut)
-
     async def suspend_account(self, db, account) -> None:
-        await self.push_limits(account, 0, False)
+        await self._request(
+            "POST", "/panel/api/clients/bulkDisable", {"emails": [account.username]}
+        )
 
     async def resume_account(self, db, account) -> None:
-        await self.push_limits(account, 0, True)
+        await self._request(
+            "POST", "/panel/api/clients/bulkEnable", {"emails": [account.username]}
+        )
+
+    async def push_limits(self, account, expiry_ms: int, enable: bool) -> None:
+        cur = await self._get_client(account.username)
+        if cur is None:
+            raise RuntimeError(f"client {account.username} not found in panel")
+        payload = {
+            "email": account.username,
+            "enable": bool(enable),
+            "expiryTime": int(expiry_ms),
+            "flow": cur.get("flow") or "xtls-rprx-vision",
+            "id": cur.get("uuid") or account.uuid,
+            "subId": cur.get("subId") or (account.extra or {}).get("sub_id", ""),
+            "limitIp": cur.get("limitIp") or 0,
+            "totalGB": cur.get("totalGB") or 0,
+            "reset": cur.get("reset") or 0,
+            "tgId": cur.get("tgId") or 0,
+            "comment": cur.get("comment") or "",
+        }
+        await self._request(
+            "POST", f"/panel/api/clients/update/{quote(account.username)}", payload
+        )
 
     async def delete_account(self, db, account) -> None:
         await self._request(
             "POST",
-            f"/panel/api/inbounds/{self._inbound_id()}/delClient/{account.uuid}",
+            f"/panel/api/clients/del/{quote(account.username)}?keepTraffic=0",
             {},
         )
 
     async def fetch_client_state(self, account) -> dict:
-        for c in await self._get_clients():
-            if self._match(c, account):
-                return {
-                    "enable": c.get("enable"),
-                    "expiryTime": c.get("expiryTime"),
-                    "up": c.get("up"),
-                    "down": c.get("down"),
-                }
-        return {}
+        cur = await self._get_client(account.username)
+        if not cur:
+            return {}
+        traffic = cur.get("traffic") or {}
+        return {
+            "enable": cur.get("enable"),
+            "expiryTime": cur.get("expiryTime"),
+            "up": traffic.get("up"),
+            "down": traffic.get("down"),
+        }
 
     def render_config(self, db, account) -> dict:
         extra = self.node.extra
@@ -181,5 +177,5 @@ class ThreeXuiAdapter(VpnAdapter):
             f"&type=tcp&headerType=none#{account.username}"
         )
         sub_base = extra.get("subscription_base")
-        sub_url = f"{sub_base}/sub/{account.extra.get('sub_id', '')}" if sub_base else None
+        sub_url = f"{sub_base}/sub/{(account.extra or {}).get('sub_id', '')}" if sub_base else None
         return {"link": link, "subscription_url": sub_url, "config_text": None}
