@@ -313,6 +313,38 @@ def service_delete(service_id: int, request: Request, db: Session = Depends(get_
     return RedirectResponse("/lk/", status_code=303)
 
 
+
+@router.get("/services/status.json")
+def services_status_json(request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    rows = db.execute(
+        select(ServiceInstance).where(ServiceInstance.user_id == user.id)
+    ).scalars().all()
+    return [
+        {"id": s.id, "status": s.status, "ru": RU_STATUS.get(s.status, s.status)}
+        for s in rows
+    ]
+
+
+@router.get("/services/{service_id}/status.json")
+def service_status_json(service_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    service = _own_service(db, user, service_id)
+    account = db.execute(
+        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+    ).scalar_one_or_none()
+    return {
+        "id": service.id,
+        "status": service.status,
+        "ru": RU_STATUS.get(service.status, service.status),
+        "has_link": account is not None and account.status != "deleted" and service.status == "active",
+    }
+
+
 @router.get("/services/{service_id}/config", response_class=HTMLResponse)
 def service_config(service_id: int, request: Request, db: Session = Depends(get_db)):
     user = _current_user(db, request)
@@ -328,8 +360,17 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
         if node is not None and account.status != "deleted":
             cfg = get_adapter(node).render_config(db, account)
             link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
+    qr_svg = ""
+    if link:
+        try:
+            import qrcode
+            from qrcode.image.svg import SvgPathImage
+            qr_svg = qrcode.make(link, image_factory=SvgPathImage).to_string(encoding="unicode")
+        except Exception:
+            qr_svg = ""
     return templates.TemplateResponse(request, "lk/config.html", {
-        "user": user, "service": service, "link": link, "sub_url": sub_url, "conf": conf,
+        "user": user, "service": service, "link": link, "sub_url": sub_url,
+        "conf": conf, "qr_svg": qr_svg,
     })
 
 

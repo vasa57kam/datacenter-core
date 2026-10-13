@@ -1,5 +1,19 @@
 {% extends "lk/base.html" %}
-{% block title %}Кабинет{% endblock %}
+{% block title %}Кабинет<script>
+  async function tick() {
+    try {
+      const r = await fetch('/lk/services/status.json');
+      if (!r.ok) return;
+      const list = await r.json();
+      for (const s of list) {
+        const el = document.querySelector('[data-svc-status="' + s.id + '"]');
+        if (el) { el.textContent = s.ru; el.className = 'st-' + s.status; }
+      }
+    } catch (e) {}
+  }
+  setInterval(tick, 7000); tick();
+</script>
+{% endblock %}
 {% block content %}
 <div class="card">
   <div class="money-label">Баланс</div>
@@ -70,7 +84,7 @@
     {% for s in services %}
     <tr>
       <td>{{ s.name }}</td>
-      <td class="st-{{ s.status }}">{{ s.status | ru_status }}</td>
+      <td class="st-{{ s.status }}" data-svc-status="{{ s.id }}">{{ s.status | ru_status }}</td>
       <td>
         <a href="/lk/services/{{ s.id }}/config" class="btn secondary">Конфиг</a>
         {% if s.status == 'active' %}
@@ -119,4 +133,18 @@
   <div class="empty-state">Операций пока нет</div>
   {% endif %}
 </div>
+<script>
+  async function tick() {
+    try {
+      const r = await fetch('/lk/services/status.json');
+      if (!r.ok) return;
+      const list = await r.json();
+      for (const s of list) {
+        const el = document.querySelector('[data-svc-status="' + s.id + '"]');
+        if (el) { el.textContent = s.ru; el.className = 'st-' + s.status; }
+      }
+    } catch (e) {}
+  }
+  setInterval(tick, 7000); tick();
+</script>
 {% endblock %}
