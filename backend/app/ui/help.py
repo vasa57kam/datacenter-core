@@ -93,6 +93,33 @@ a{color:#58a6ff}
 <h2>8. Резервные копии</h2>
 <p>cron ежедневно складывает pg_dump в <code>/var/backups</code> (ротация 14 дней). Восстановление: <code>docker compose exec -T db pg_restore -U billing -d billing --clean &lt; /var/backups/…dump</code>.</p>
 
+
+<h2>9. Быстрый импорт ноды из конфига</h2>
+<p>Скопируй JSON входящего подключения из 3x-ui (входящие → изменить → расширенный шаблон / или JSON который ты готовил для создания) и выполни на сервере:</p>
+<pre>cat &gt; /tmp/inbound.json &lt;&lt;'JSON'
+{сюда вставить JSON inbound}
+JSON
+source /root/billing-creds.env
+TOKEN=$(curl -s -X POST http://127.0.0.1:8008/api/v1/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" | sed 's/.*"access_token":"\([^"]*\)".*/\1/')
+python3 - &lt;&lt;'PY'
+import json, os, urllib.request
+payload = {"inbound": json.load(open("/tmp/inbound.json")), "country": "NL", "endpoint_host": "vps.itkam34.ru"}
+# если inbound УЖЕ создан в панели и известен id — добавь: payload["inbound_id"] = 25
+req = urllib.request.Request("http://127.0.0.1:8008/api/v1/admin/nodes/import",
+    data=json.dumps(payload).encode(),
+    headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["TOKEN"]},
+    method="POST")
+print(urllib.request.urlopen(req).read().decode())
+PY</pre>
+<p>Импорт сам вытащит порт, SNI, publicKey, shortId, fingerprint, spiderX и создаст ноду в биллинге. Если <code>inbound_id</code> не указан — inbound будет создан в панели этим же JSON.</p>
+
+<h2>10. Быстрое создание тарифов</h2>
+<p>Одной командой создаётся/обновляется набор: посекундно, поминутно, за ГиБ, помесячно.</p>
+<pre>docker compose run --rm api python scripts/quick_tariffs.py --protocol vless --country NL</pre>
+<p>Со своими ценами (копейки):</p>
+<pre>docker compose run --rm api python scripts/quick_tariffs.py --protocol vless --country NL --prices '{"second":2,"minute":150,"gb":100,"month":30000}'</pre>
+<p>Или через API: <code>POST /api/v1/admin/products/quick</code> с телом <code>{"protocol":"vless","country":"NL","prices":{...}}</code>. Продукты сразу появляются в кабинете на странице подключения.</p>
+
 <p style="margin-top:40px"><a href="/admin">← Вернуться в админку</a> · <a href="/lk/">Кабинет</a></p>
 </main></body></html>"""
 
