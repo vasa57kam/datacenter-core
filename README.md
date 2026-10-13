@@ -26,3 +26,6 @@ ADMIN_EMAIL=you@example.com bash install.sh   # или: GIT_TOKEN=... для п�
 
 ## Исправления  в 
 FIXES.md
+
+
+old- это папка содержит старую версию для ознакомления
