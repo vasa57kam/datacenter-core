@@ -39,6 +39,8 @@ make_env() {
   INT_KEY=$(openssl rand -hex 24); FERNET=$(openssl rand -base64 32)
   cat > "${INSTALL_DIR}/.env" <<ENV
 POSTGRES_PASSWORD=${PG_PASS}
+grep -q '^POSTGRES_USER=' .env || echo 'POSTGRES_USER=billing' >> .env
+grep -q '^POSTGRES_DB=' .env || echo 'POSTGRES_DB=billing' >> .env
 DATABASE_URL=postgresql+psycopg://billing:${PG_PASS}@db:5432/billing
 REDIS_URL=redis://redis:6379/0
 JWT_SECRET=${JWT_SEC}
