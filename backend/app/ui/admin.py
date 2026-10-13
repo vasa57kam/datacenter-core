@@ -154,7 +154,7 @@ class ProductAdmin(ModelView, model=Product):
     form_choices = {
         Product.service_type: [("vpn", "VPN"), ("vps", "VPS/серверы"), ("cctv", "Видеонаблюдение"),
                                ("hosting", "Хостинг"), ("storage", "Хранилище"), ("mail", "Почта")],
-        Product.unit: [("second", "посекундно"), ("minute", "поминутно"), ("hour", "почасово"), ("day", "в день"), ("month", "помесячно"), ("one_time", "разовый платёж")],
+        Product.unit: [("second", "посекундно"), ("minute", "поминутно"), ("hour", "почасово"), ("day", "в день"), ("month", "помесячно (списание при активации)"), ("one_time", "разовый платёж"), ("gb", "по трафику, ₽ за ГиБ"), ("mb", "по трафику, ₽ за МиБ")],
     }
     can_delete = False
     name = "Продукт"
@@ -387,19 +387,3 @@ def setup_admin(app, secret_key: str) -> None:
                  NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):
         admin.add_view(view)
 
-    try:
-        from sqladmin import BaseView
-        from starlette.responses import RedirectResponse as _Redirect
-
-        class HelpView(BaseView):
-            path = "/admin/help"
-            title = "База знаний"
-            icon = "fa fa-book"
-            methods = ["GET"]
-
-            async def dispatch(self, request):
-                return _Redirect("/admin-help", status_code=302)
-
-        admin.add_view(HelpView)
-    except Exception:
-        pass

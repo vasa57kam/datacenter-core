@@ -70,7 +70,7 @@ class Product(Base):
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     __table_args__ = (
         CheckConstraint("service_type in ('vpn','vps','cctv','hosting','storage','mail')", name="products_type_ck"),
-        CheckConstraint("unit in ('second','minute','hour','day','month','one_time')", name="products_unit_ck"),
+        CheckConstraint("unit in ('second','minute','hour','day','month','one_time','gb','mb')", name="products_unit_ck"),
         CheckConstraint("price_minor >= 0", name="products_price_ck"),
     )
 
@@ -167,6 +167,7 @@ class UsageSession(Base):
     tx_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     charged_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    traffic_pending_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
     account = relationship("VpnAccount")
     __table_args__ = (

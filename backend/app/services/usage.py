@@ -12,6 +12,8 @@ from app.services.provisioning import enqueue_task
 log = logging.getLogger(__name__)
 
 TICK_SECONDS = {"second": 1, "minute": 60}
+TRAFFIC_BYTES = {"gb": 1024 ** 3, "mb": 1024 ** 2}
+PREPAID_UNITS = {"month", "one_time"}
 
 
 def utcnow() -> datetime:
@@ -56,6 +58,9 @@ def report_usage(db, node: VpnNode, item) -> UsageSession | None:
         if item.external_session_id and not session.external_session_id:
             session.external_session_id = item.external_session_id
 
+    delta = (item.rx_bytes + item.tx_bytes) - (session.rx_bytes + session.tx_bytes)
+    if delta > 0:
+        session.traffic_pending_bytes = (session.traffic_pending_bytes or 0) + delta
     session.rx_bytes = item.rx_bytes
     session.tx_bytes = item.tx_bytes
     db.flush()
@@ -88,6 +93,38 @@ def charge_active_sessions() -> None:
                 continue
             product = db.get(Product, service.product_id)
             if product is None or product.unit not in TICK_SECONDS:
+                continue
+            if product.unit in PREPAID_UNITS:
+                continue
+            if product.unit in TRAFFIC_BYTES:
+                wallet = ledger.get_wallet(db, service.user_id)
+                unit_bytes = TRAFFIC_BYTES[product.unit]
+                pending = session.traffic_pending_bytes or 0
+                units = pending // unit_bytes
+                if units <= 0:
+                    db.commit()
+                    continue
+                charged_units = 0
+                for n in range(session.charged_minutes + 1, session.charged_minutes + units + 1):
+                    key = f"usage:session:{session.id}:traffic:{n}"
+                    try:
+                        ledger.debit(
+                            db, wallet, product.price_minor,
+                            reason=f"vpn_traffic_{product.unit}",
+                            entity_type="usage_session",
+                            entity_id=session.id,
+                            idempotency_key=key,
+                        )
+                    except ledger.InsufficientFunds:
+                        _suspend(db, service, session)
+                        break
+                    session.charged_minutes = n
+                    session.cost_minor += product.price_minor
+                    charged_units += 1
+                session.traffic_pending_bytes = pending - charged_units * unit_bytes
+                db.commit()
+                if charged_units:
+                    log.info("session %s charged %s %s of traffic", session.id, charged_units, product.unit)
                 continue
             tick = TICK_SECONDS[product.unit]
             wallet = ledger.get_wallet(db, service.user_id)

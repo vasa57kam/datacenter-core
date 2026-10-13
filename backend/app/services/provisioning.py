@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.adapters.vpn import get_adapter
+from app.services import ledger
 from app.db import SessionLocal
 from app.models import (
     Product, ProvisioningTask, ServiceInstance, VpnAccount, VpnNode,
@@ -68,6 +69,19 @@ def _execute_create(db: Session, service: ServiceInstance) -> dict:
 
     result = asyncio.run(get_adapter(node).create_account(db, service, product))
 
+    product_unit = product.unit if product else "minute"
+    if product_unit in ("month", "one_time") and product:
+        wallet = ledger.get_wallet(db, service.user_id)
+        try:
+            ledger.debit(
+                db, wallet, product.price_minor,
+                reason=f"service_activation_{product_unit}",
+                entity_type="service_instance",
+                entity_id=service.id,
+                idempotency_key=f"activate:{service.id}:{product_unit}",
+            )
+        except ledger.InsufficientFunds:
+            raise ValueError("Insufficient balance for prepaid activation")
     account = VpnAccount(
         service_instance_id=service.id,
         node_id=node.id,
@@ -194,3 +208,31 @@ def process_pending_tasks_sync() -> int:
     finally:
         db.close()
     return processed
+
+
+def process_task_now(db: Session, task_id: int) -> None:
+    """Выполняет задачу синхронно в текущей сессии (для мгновенного отказа)."""
+    task = db.get(ProvisioningTask, task_id)
+    if task is None or task.status not in ("pending", "error"):
+        return
+    task.status = "running"
+    task.attempts += 1
+    db.flush()
+    try:
+        handler = ACTION_HANDLERS.get(task.action)
+        if handler is None:
+            raise ValueError(f"Unknown action: {task.action}")
+        service = db.get(ServiceInstance, task.entity_id)
+        if service is None:
+            raise ValueError(f"Service {task.entity_id} not found")
+        result = handler(db, service)
+        task.result = result or {}
+        task.status = "done"
+        task.error = None
+    except Exception as e:
+        log.exception("task %s failed: %s", task_id, e)
+        db.rollback()
+        task = db.get(ProvisioningTask, task_id)
+        if task is not None:
+            task.status = "pending"
+            task.error = str(e)[:500]

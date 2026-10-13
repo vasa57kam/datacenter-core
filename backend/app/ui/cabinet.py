@@ -305,7 +305,10 @@ def service_delete(service_id: int, request: Request, db: Session = Depends(get_
     if user is None:
         raise HTTPException(status_code=401)
     service = _own_service(db, user, service_id)
-    enqueue_task(db, "service_instance", service.id, "delete")
+    task = enqueue_task(db, "service_instance", service.id, "delete")
+    db.commit()
+    from app.services.provisioning import process_task_now
+    process_task_now(db, task.id)
     db.commit()
     return RedirectResponse("/lk/", status_code=303)
 
