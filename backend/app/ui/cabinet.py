@@ -287,6 +287,17 @@ def order_create(
     return RedirectResponse("/lk/", status_code=303)
 
 
+@router.post("/services/{service_id}/delete")
+def service_delete(service_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    service = _own_service(db, user, service_id)
+    enqueue_task(db, "service_instance", service.id, "delete")
+    db.commit()
+    return RedirectResponse("/lk/", status_code=303)
+
+
 @router.get("/services/{service_id}/config", response_class=HTMLResponse)
 def service_config(service_id: int, request: Request, db: Session = Depends(get_db)):
     user = _current_user(db, request)

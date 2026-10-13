@@ -26,7 +26,7 @@ def create_vpn_service(
     product = db.execute(
         select(Product).where(Product.code == payload.product_code, Product.active == True)
     ).scalar_one_or_none()
-    if not product or product.service_type != "vpn":
+    if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
     # Выбираем ноду
@@ -37,8 +37,6 @@ def create_vpn_service(
         ).scalar_one_or_none()
         if not node:
             raise HTTPException(status_code=404, detail=f"Node {payload.node_code} not found")
-        if node.protocol != product.config.get("protocol", node.protocol):
-            raise HTTPException(status_code=400, detail="Node protocol does not match product")
     else:
         # Автоматический выбор первой активной ноды нужного протокола
         proto = product.config.get("protocol", "vless")
@@ -46,7 +44,7 @@ def create_vpn_service(
             select(VpnNode).where(VpnNode.protocol == proto, VpnNode.active == True)
         ).scalars().first()
     
-    # ИСПРАВЛЕНИЕ: правильный приоритет операторов
+    # Правильный приоритет операторов
     if payload.name:
         service_name = payload.name
     elif node:
@@ -93,7 +91,7 @@ def get_service_config(
     if service.status == "provisioning":
         raise HTTPException(status_code=202, detail="Still provisioning, try again in 15 seconds")
     
-    # ИСПРАВЛЕНИЕ: правильный доступ к accounts (relationship уже загружен через selectin)
+    # accounts - это list (lazy="selectin"), не Query
     account = None
     if hasattr(service, 'accounts') and service.accounts:
         account = service.accounts[0] if service.accounts else None
@@ -119,3 +117,21 @@ def get_service_config(
         "subscription_url": cfg.get("subscription_url"),
         "config_text": cfg.get("config_text"),
     }
+
+
+@router.delete("/{service_id}")
+def delete_service(
+    service_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Физическое удаление услуги с каскадом (аккаунт, сессии)."""
+    service = db.get(ServiceInstance, service_id)
+    if not service or service.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Service not found")
+    
+    # Создаём задачу на удаление
+    enqueue_task(db, "service_instance", service.id, "delete")
+    db.commit()
+    
+    return {"ok": True, "message": "Service deletion queued"}

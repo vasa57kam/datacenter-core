@@ -72,6 +72,11 @@
         <form method="post" action="/lk/services/{{ s.id }}/resume" style="display:inline">
           <button>Возобновить</button>
         </form>
+        
+        <form method="post" action="/lk/services/{{ s.id }}/delete" style="display:inline"
+              onsubmit="return confirm('Удалить услугу безвозвратно?')">
+          <button class="danger">Удалить</button>
+        </form>
         {% endif %}
       </td>
     </tr>
