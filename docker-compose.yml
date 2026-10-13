@@ -22,7 +22,7 @@ services:
     container_name: billing-api
     restart: unless-stopped
     env_file: .env
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"
     ports:
       - "8008:8000"
     depends_on:
