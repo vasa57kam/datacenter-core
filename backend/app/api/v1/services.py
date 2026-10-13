@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import current_user
-from app.models import Product, ServiceInstance, User, VpnNode
+from app.models import Product, ServiceInstance, User, VpnNode, VpnAccount
 from app.services.provisioning import enqueue_task
 
 router = APIRouter(prefix="/api/v1/services", tags=["services"])
@@ -22,25 +23,39 @@ def create_vpn_service(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    product = db.query(Product).filter_by(code=payload.product_code, active=True).first()
+    product = db.execute(
+        select(Product).where(Product.code == payload.product_code, Product.active == True)
+    ).scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
     # Выбираем ноду
     node = None
     if payload.node_code:
-        node = db.query(VpnNode).filter_by(code=payload.node_code, active=True).first()
+        node = db.execute(
+            select(VpnNode).where(VpnNode.code == payload.node_code, VpnNode.active == True)
+        ).scalar_one_or_none()
         if not node:
             raise HTTPException(status_code=404, detail=f"Node {payload.node_code} not found")
     else:
         # Автоматический выбор первой активной ноды нужного протокола
         proto = product.config.get("protocol", "vless")
-        node = db.query(VpnNode).filter_by(protocol=proto, active=True).first()
+        node = db.execute(
+            select(VpnNode).where(VpnNode.protocol == proto, VpnNode.active == True)
+        ).scalars().first()
+    
+    # ИСПРАВЛЕНИЕ: правильный приоритет операторов
+    if payload.name:
+        service_name = payload.name
+    elif node:
+        service_name = f"{product.name} @ {node.code}"
+    else:
+        service_name = product.name
     
     service = ServiceInstance(
         user_id=user.id,
         product_id=product.id,
-        name=payload.name or f"{product.name} @ {node.code}" if node else product.name,
+        name=service_name,
         status="provisioning" if node else "pending",
         config={"node_id": node.id} if node else {},
     )
@@ -76,16 +91,23 @@ def get_service_config(
     if service.status == "provisioning":
         raise HTTPException(status_code=202, detail="Still provisioning, try again in 15 seconds")
     
-    account = service.accounts.first() if hasattr(service, 'accounts') else None
+    # ИСПРАВЛЕНИЕ: правильный доступ к accounts (relationship уже загружен через selectin)
+    account = None
+    if hasattr(service, 'accounts') and service.accounts:
+        account = service.accounts[0] if service.accounts else None
+    
     if not account:
-        from app.models import VpnAccount
-        account = db.query(VpnAccount).filter_by(service_instance_id=service.id).first()
+        account = db.execute(
+            select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+        ).scalar_one_or_none()
     
     if not account:
         raise HTTPException(status_code=404, detail="Account not provisioned yet")
     
-    from app.models import VpnNode
     node = db.get(VpnNode, account.node_id)
+    if not node:
+        raise HTTPException(status_code=500, detail="VPN node not found")
+    
     cfg = get_adapter(node).render_config(db, account)
     
     return {

@@ -79,8 +79,9 @@ def _execute_create(db: Session, service: ServiceInstance) -> dict:
 
 
 def _execute_suspend(db: Session, service: ServiceInstance) -> dict:
-    from app.models import VpnAccount
-    account = db.query(VpnAccount).filter_by(service_instance_id=service.id).first()
+    account = db.execute(
+        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+    ).scalar_one_or_none()
     if not account:
         return {"skipped": True}
     
@@ -92,8 +93,9 @@ def _execute_suspend(db: Session, service: ServiceInstance) -> dict:
 
 
 def _execute_resume(db: Session, service: ServiceInstance) -> dict:
-    from app.models import VpnAccount
-    account = db.query(VpnAccount).filter_by(service_instance_id=service.id).first()
+    account = db.execute(
+        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+    ).scalar_one_or_none()
     if not account:
         return {"skipped": True}
     
@@ -105,8 +107,9 @@ def _execute_resume(db: Session, service: ServiceInstance) -> dict:
 
 
 def _execute_delete(db: Session, service: ServiceInstance) -> dict:
-    from app.models import VpnAccount
-    account = db.query(VpnAccount).filter_by(service_instance_id=service.id).first()
+    account = db.execute(
+        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+    ).scalar_one_or_none()
     if not account:
         return {"skipped": True}
     
@@ -144,6 +147,9 @@ def process_pending_tasks_sync() -> int:
             task.attempts += 1
             db.flush()
             
+            # ИСПРАВЛЕНИЕ: инициализируем result чтобы избежать UnboundLocalError
+            result = None
+            
             try:
                 handler = ACTION_HANDLERS.get(task.action)
                 if not handler:
@@ -160,10 +166,10 @@ def process_pending_tasks_sync() -> int:
                     task.error = None
                 
                 processed += 1
-                log.info(f"Task {task.id} ({task.action}) completed: {result}")
+                log.info(f"Task {task.id} ({task.action}) completed successfully")
                 
             except Exception as e:
-                log.exception(f"Task {task.id} failed: {e}")
+                log.exception(f"Task {task.id} ({task.action}) failed: {e}")
                 task.status = "error"
                 task.error = str(e)[:500]
             

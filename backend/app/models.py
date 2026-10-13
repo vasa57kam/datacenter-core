@@ -89,7 +89,7 @@ class ServiceInstance(Base):
     )
     user = relationship("User")
     product = relationship("Product")
-    accounts = relationship("VpnAccount", back_populates="service", lazy="selectin")
+    accounts = relationship("VpnAccount", back_populates="service")
     __table_args__ = (
         CheckConstraint(
             "status in ('pending','provisioning','active','suspended','terminated')",
