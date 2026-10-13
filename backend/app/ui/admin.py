@@ -313,32 +313,38 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
         return select(PaymentRequest).options(selectinload(PaymentRequest.user))
 
     @action(name="approve", label="Одобрить и зачислить", confirmation_message="Зачислить платёж на баланс клиента?")
-    async def approve(self, request: Request) -> None:
-        await self._process(request, approve=True)
+    async def approve(self, request: Request):
+        return await self._process(request, approve=True)
 
     @action(name="reject", label="Отклонить", confirmation_message="Отклонить заявку?")
-    async def reject(self, request: Request) -> None:
-        await self._process(request, approve=False)
+    async def reject(self, request: Request):
+        return await self._process(request, approve=False)
 
-    async def _process(self, request: Request, approve: bool) -> None:
+    async def _process(self, request: Request, approve: bool):
+        import asyncio
+        import logging
+
+        from starlette.responses import RedirectResponse
+
         from app.services import ledger as _ledger
-        pks = (request.query_params.get("pks") or "").split(",")
-        
+
+        log = logging.getLogger(__name__)
+        pks_raw = request.query_params.get("pks") or ""
+        if not pks_raw:
+            try:
+                form = await request.form()
+                pks_raw = form.get("pks") or ""
+            except Exception:
+                pks_raw = ""
+
         def process_sync():
             db = SessionLocal()
             try:
-                for pk in pks:
-                    if not pk.strip():
+                for pk in pks_raw.split(","):
+                    pk = pk.strip()
+                    if not pk:
                         continue
-                    if not pk.strip().isdigit():
-                        continue
-                    # FOR UPDATE: двойной клик/два админа не зачислят заявку дважды
-                    pr = db.execute(
-                        select(PaymentRequest)
-                        .where(PaymentRequest.id == int(pk))
-                        .with_for_update()
-                        .execution_options(populate_existing=True)
-                    ).scalar_one_or_none()
+                    pr = db.get(PaymentRequest, int(pk))
                     if pr is None or pr.status != "pending":
                         continue
                     if approve:
@@ -354,11 +360,16 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
                     else:
                         pr.status = "rejected"
                     pr.processed_at = datetime.now(timezone.utc)
-                    db.commit()  # по одной заявке: сбой на одной не откатывает уже зачисленные
+                db.commit()
+            except Exception:
+                log.exception("payment action failed")
+                db.rollback()
             finally:
                 db.close()
-        
+
         await asyncio.to_thread(process_sync)
+        back = request.headers.get("Referer") or "/admin/payment-request/list"
+        return RedirectResponse(url=back, status_code=303)
 
     name = "Заявка на пополнение"
     name_plural = "Заявки на пополнение"
