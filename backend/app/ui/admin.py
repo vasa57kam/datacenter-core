@@ -382,6 +382,7 @@ def setup_admin(app, secret_key: str) -> None:
         authentication_backend=auth,
         title="ITKAM34 Billing",
         base_url="/admin",
+        templates_dir="app/ui/admin_templates",
     )
     for view in (UserAdmin, WalletAdmin, LedgerAdmin, ProductAdmin, ServiceAdmin,
                  NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):

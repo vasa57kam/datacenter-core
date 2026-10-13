@@ -120,6 +120,14 @@ PY</pre>
 <pre>docker compose run --rm api python scripts/quick_tariffs.py --protocol vless --country NL --prices '{"second":2,"minute":150,"gb":100,"month":30000}'</pre>
 <p>Или через API: <code>POST /api/v1/admin/products/quick</code> с телом <code>{"protocol":"vless","country":"NL","prices":{...}}</code>. Продукты сразу появляются в кабинете на странице подключения.</p>
 
+
+<h2>11. Импорт ноды и тарифы через веб-интерфейс</h2>
+<p>Главная админки → кнопки «🚀 Импорт ноды из JSON» и «⚡ Быстрые тарифы» (или <code>/admin-ops/</code>).</p>
+<ul>
+<li><b>Импорт ноды</b>: вставь JSON inbound из 3x-ui. Если Inbound ID = 0 — inbound создастся в панели этим же JSON; иначе привяжется к указанному id. Код/название/хост опциональны (генерируются).</li>
+<li><b>Тарифы</b>: 4 цены в копейках (сек/мин/ГиБ/мес) → создаётся или обновляется набор <code>vpn-&lt;proto&gt;-second|minute|gb|month</code>. Месяц списывается один раз при активации, сек/мин/ГиБ — по факту использования.</li>
+</ul>
+
 <p style="margin-top:40px"><a href="/admin">← Вернуться в админку</a> · <a href="/lk/">Кабинет</a></p>
 </main></body></html>"""
 

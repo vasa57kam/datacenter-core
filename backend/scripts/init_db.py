@@ -17,15 +17,12 @@ FK_CASCADE_FIXES = [
 
 CONSTRAINT_FIXES = [
     "ALTER TABLE usage_sessions ADD COLUMN IF NOT EXISTS traffic_pending_bytes BIGINT NOT NULL DEFAULT 0",
-    "ALTER TABLE products DROP CONSTRAINT IF EXISTS products_unit_ck",
-    """ALTER TABLE products ADD CONSTRAINT products_unit_ck
-       CHECK (unit IN ('second','minute','hour','day','month','one_time','gb','mb'))""",
     "ALTER TABLE products DROP CONSTRAINT IF EXISTS products_type_ck",
     """ALTER TABLE products ADD CONSTRAINT products_type_ck
        CHECK (service_type IN ('vpn','vps','cctv','hosting','storage','mail'))""",
     "ALTER TABLE products DROP CONSTRAINT IF EXISTS products_unit_ck",
     """ALTER TABLE products ADD CONSTRAINT products_unit_ck
-       CHECK (unit IN ('second','minute','hour','day','month','one_time'))""",
+       CHECK (unit IN ('second','minute','hour','day','month','one_time','gb','mb'))""",
 ]
 
 

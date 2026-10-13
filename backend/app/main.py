@@ -5,7 +5,7 @@ from app.api.internal import cctv as internal_cctv
 from app.api.internal import vpn as internal_vpn
 from app.api.v1 import admin, auth, products, quickops, services, wallet
 from app.core.config import settings
-from app.ui import cabinet
+from app.ui import cabinet, ops
 from app.ui.admin import setup_admin
 from app.ui.help import router as help_router
 
@@ -29,6 +29,7 @@ for router in (
     internal_vpn.router,
     internal_cctv.router,
     cabinet.router,
+    ops.router,
     help_router,
 ):
     app.include_router(router)

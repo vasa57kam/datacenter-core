@@ -1,0 +1,21 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Быстрые операции{% endblock %}
+{% block content %}
+<div class="card">
+<h1>🚀 Быстрые операции</h1>
+<p class="note">Всё, что раньше делалось командами — теперь кнопками.</p>
+<p style="margin-top:20px">
+  <a class="btn" href="/admin-ops/nodes/import">Импорт ноды из JSON</a>
+  <a class="btn" href="/admin-ops/tariffs">Быстрые тарифы</a>
+  <a class="btn sec" href="/admin-help">📚 База знаний</a>
+</p>
+</div>
+<div class="card">
+<h2>Как это работает</h2>
+<ul>
+<li><b>Импорт ноды</b>: вставь JSON входящего подключения 3x-ui → укажи код/страну → «Импортировать». Биллинг сам создаст inbound в панели (если id не указан) и пропишет ноду с ключами.</li>
+<li><b>Быстрые тарифы</b>: четыре цены (копейки) → «Создать/обновить». Тарифы сразу появляются в кабинете клиента.</li>
+<li><b>База знаний</b>: рецепты тарифов, жизненный цикл услуг, деньги, troubleshooting.</li>
+</ul>
+</div>
+{% endblock %}

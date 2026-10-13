@@ -1,0 +1,24 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Импорт ноды{% endblock %}
+{% block content %}
+<div class="card">
+<h1>Импорт VPN-ноды из JSON</h1>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+{% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+<form method="post" action="/admin-ops/nodes/import">
+<label>JSON входящего подключения (из 3x-ui: входящие → изменить → расширенный шаблон / экспорт)</label>
+<textarea name="inbound_json" required placeholder='{"listen":"","port":39628,"protocol":"vless",...}'>{{ inbound_json }}</textarea>
+<div class="row">
+<div><label>Inbound ID (0 = создать новый в панели)</label><input type="number" name="inbound_id" value="0"></div>
+<div><label>Код ноды (пусто = авто)</label><input name="code" placeholder="nl-vless-03"></div>
+</div>
+<div class="row">
+<div><label>Название (пусто = авто)</label><input name="name"></div>
+<div><label>Страна</label><input name="country" value="NL"></div>
+</div>
+<label>Хост для клиентов (пусто = как у первой ноды)</label>
+<input name="endpoint_host" placeholder="vps.itkam34.ru">
+<p style="margin-top:18px"><button class="btn" type="submit">Импортировать ноду</button></p>
+</form>
+</div>
+{% endblock %}

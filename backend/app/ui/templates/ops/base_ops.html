@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Операции{% endblock %} · ITKAM34</title>
+<style>
+body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#e6edf3;margin:0;line-height:1.6}
+.wrap{max-width:860px;margin:0 auto;padding:28px 20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;margin-bottom:20px}
+h1{font-size:26px;margin:0 0 8px}h2{font-size:20px;margin:0 0 16px}
+a{color:#58a6ff;text-decoration:none}a:hover{text-decoration:underline}
+.btn{display:inline-block;background:#238636;color:#fff;border:none;padding:10px 22px;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none}
+.btn:hover{background:#2ea043;text-decoration:none}
+.btn.sec{background:#21262d;border:1px solid #30363d}
+label{display:block;margin:12px 0 6px;color:#8b949e;font-size:14px}
+input,textarea,select{width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:10px;border-radius:6px;font-size:14px}
+textarea{font-family:monospace;font-size:12px;min-height:220px}
+.err{background:#3d1418;border:1px solid #f85149;padding:10px 14px;border-radius:8px;margin-bottom:16px}
+.ok{background:#0f2d1a;border:1px solid #3fb950;padding:10px 14px;border-radius:8px;margin-bottom:16px}
+.note{color:#8b949e;font-size:13px}
+.row{display:flex;gap:12px}.row>*{flex:1}
+</style></head><body><div class="wrap">
+<p><a href="/admin/">← В админку</a> · <a href="/admin-ops/">Операции</a> · <a href="/admin-help">База знаний</a></p>
+{% block content %}{% endblock %}
+</div></body></html>

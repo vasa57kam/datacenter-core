@@ -1,0 +1,25 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Быстрые тарифы{% endblock %}
+{% block content %}
+<div class="card">
+<h1>⚡ Быстрое создание тарифов</h1>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+{% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+<p class="note">Цены в копейках. Создаётся/обновляется набор из 4 тарифов; они сразу видны в кабинете.</p>
+<form method="post" action="/admin-ops/tariffs">
+<div class="row">
+<div><label>Протокол</label><select name="protocol"><option>vless</option><option>wireguard</option><option>openvpn</option></select></div>
+<div><label>Страна</label><input name="country" value="NL"></div>
+</div>
+<div class="row">
+<div><label>Посекундно, коп/сек</label><input type="number" name="price_second" value="2"></div>
+<div><label>Поминутно, коп/мин</label><input type="number" name="price_minute" value="150"></div>
+</div>
+<div class="row">
+<div><label>По трафику, коп/ГиБ</label><input type="number" name="price_gb" value="100"></div>
+<div><label>Помесячно, коп/мес</label><input type="number" name="price_month" value="30000"></div>
+</div>
+<p style="margin-top:18px"><button class="btn" type="submit">Создать / обновить тарифы</button></p>
+</form>
+</div>
+{% endblock %}
