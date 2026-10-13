@@ -1,0 +1,18 @@
+{% extends "lk/base.html" %}
+{% block title %}Регистрация{% endblock %}
+{% block content %}
+<div class="card" style="max-width:400px;margin:64px auto">
+  <h2>Регистрация</h2>
+  {% if error %}<p style="color:#f85149;margin-bottom:16px">{{ error }}</p>{% endif %}
+  <form method="post" action="/lk/register">
+    <label>Email</label>
+    <input name="email" type="email" placeholder="you@example.com" required>
+    <label>Пароль</label>
+    <input name="password" type="password" placeholder="Минимум 8 символов" minlength="8" required>
+    <button type="submit" style="width:100%">Создать аккаунт</button>
+  </form>
+  <p style="text-align:center;margin-top:16px">
+    <a href="/lk/login">Уже есть аккаунт? Войти</a>
+  </p>
+</div>
+{% endblock %}
