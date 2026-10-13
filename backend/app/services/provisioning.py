@@ -142,6 +142,25 @@ ACTION_HANDLERS = {
 }
 
 
+def recover_stuck_tasks() -> None:
+    from datetime import timedelta
+    db = SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+        stuck = db.execute(
+            select(ProvisioningTask).where(
+                ProvisioningTask.status == "running",
+                ProvisioningTask.updated_at < cutoff,
+            )
+        ).scalars().all()
+        for t in stuck:
+            t.status = "pending"
+        if stuck:
+            db.commit()
+    finally:
+        db.close()
+
+
 def process_pending_tasks_sync() -> int:
     """Обрабатывает pending tasks. Вызывается из worker."""
     db = SessionLocal()
@@ -183,9 +202,14 @@ def process_pending_tasks_sync() -> int:
                 
             except Exception as e:
                 log.exception(f"Task {task.id} ({task.action}) failed: {e}")
-                task.status = "error"
-                task.error = str(e)[:500]
                 db.rollback()
+                task = db.get(ProvisioningTask, task.id)
+                if task.attempts >= 3:
+                    task.status = "error"
+                    task.error = str(e)[:500]
+                else:
+                    task.status = "pending"
+                    task.error = str(e)[:500]
             
             db.commit()
     

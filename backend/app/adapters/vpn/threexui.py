@@ -1,8 +1,6 @@
-import hashlib
 import json
 import re
-import threading
-from urllib.parse import quote
+import time
 
 import httpx
 
@@ -18,12 +16,9 @@ INBOUND_KEYS = (
     "listen", "port", "protocol", "streamSettings", "sniffing", "allocate",
 )
 
-# Кэшируем только cookie+CSRF (а не httpx-клиент): воркер вызывает asyncio.run() на каждую
-# операцию, и клиент/Lock, привязанные к закрытому event loop, ломаются ("Event loop is closed").
-_AUTH: dict[int, dict] = {}
-# Панель правится по схеме «прочитал inbound целиком → записал целиком», поэтому
-# параллельные изменения из разных потоков воркера затирали бы друг друга.
-_PANEL_LOCK = threading.Lock()
+# Кэшируем ТОЛЬКО cookies+csrf (строки), не клиент — клиент живёт внутри одного loop
+_AUTH_CACHE: dict[int, dict] = {}
+_AUTH_TTL = 600
 
 
 class ThreeXuiAdapter(VpnAdapter):
@@ -33,79 +28,69 @@ class ThreeXuiAdapter(VpnAdapter):
     def _password(self) -> str:
         return security.decrypt_secret(self.node.api_key_enc)
 
-    def _client(self) -> httpx.AsyncClient:
+    def _client(self, cookies: dict | None = None) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             timeout=30,
             verify=self.node.extra.get("verify_tls", False),
             headers=UA,
             follow_redirects=True,
+            cookies=cookies or {},
         )
 
-    async def _login(self, client: httpx.AsyncClient) -> str:
-        page = await client.get(f"{self._base()}/panel/")
-        csrf = ""
-        m = CSRF_RE.search(page.text or "")
-        if m:
-            csrf = m.group(1) or m.group(2) or ""
-        user, pwd = self.node.api_user, self._password()
-        headers = {"Referer": f"{self._base()}/panel/", "X-CSRF-Token": csrf}
-        resp = await client.post(
-            f"{self._base()}/login",
-            json={"username": user, "password": pwd},
-            headers=headers,
-        )
-        if resp.status_code >= 400:
-            headers["X-XSRF-Token"] = csrf
+    async def _login_fresh(self) -> tuple[dict, str]:
+        async with self._client() as client:
+            page = await client.get(f"{self._base()}/panel/")
+            csrf = ""
+            m = CSRF_RE.search(page.text or "")
+            if m:
+                csrf = m.group(1) or m.group(2) or ""
+            headers = {"Referer": f"{self._base()}/panel/", "X-CSRF-Token": csrf}
             resp = await client.post(
                 f"{self._base()}/login",
-                data={"username": user, "password": pwd},
+                json={"username": self.node.api_user, "password": self._password()},
                 headers=headers,
             )
-        if resp.status_code >= 400:
-            raise RuntimeError(f"3x-ui login failed: HTTP {resp.status_code} {resp.text[:200]}")
-        return csrf
+            if resp.status_code >= 400:
+                headers["X-XSRF-Token"] = csrf
+                resp = await client.post(
+                    f"{self._base()}/login",
+                    data={"username": self.node.api_user, "password": self._password()},
+                    headers=headers,
+                )
+            if resp.status_code >= 400:
+                raise RuntimeError(f"3x-ui login failed: HTTP {resp.status_code}")
+            cookies = {k: v for k, v in client.cookies.items()}
+            return cookies, csrf
 
-    def _save_auth(self, client: httpx.AsyncClient, csrf: str) -> None:
-        _AUTH[self.node.id] = {"cookies": dict(client.cookies.items()), "csrf": csrf}
-
-    async def _send(self, client, method, path, payload, csrf):
-        resp = await client.request(
-            method, f"{self._base()}{path}",
-            json=payload, headers={"X-CSRF-Token": csrf},
-        )
-        data = None
-        if resp.status_code < 400:
-            try:
-                data = resp.json()
-            except ValueError:
-                data = None  # HTML вместо JSON — обычно страница логина (сессия протухла)
-        return resp, data
+    async def _auth(self) -> tuple[dict, str]:
+        now = time.time()
+        cached = _AUTH_CACHE.get(self.node.id)
+        if cached and now - cached["ts"] < _AUTH_TTL:
+            return cached["cookies"], cached["csrf"]
+        cookies, csrf = await self._login_fresh()
+        _AUTH_CACHE[self.node.id] = {"cookies": cookies, "csrf": csrf, "ts": now}
+        return cookies, csrf
 
     async def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
-        async with self._client() as client:
-            auth = _AUTH.get(self.node.id)
-            cached = auth is not None
-            if cached:
-                client.cookies.update(auth["cookies"])
-                csrf = auth["csrf"]
-            else:
-                csrf = await self._login(client)
-                self._save_auth(client, csrf)
-
-            resp, data = await self._send(client, method, path, payload, csrf)
-            # 3x-ui на неавторизованный запрос может ответить 401/403/404 или страницей логина
-            if cached and (resp.status_code in (401, 403, 404) or (resp.status_code < 400 and data is None)):
-                csrf = await self._login(client)
-                self._save_auth(client, csrf)
-                resp, data = await self._send(client, method, path, payload, csrf)
-
+        cookies, csrf = await self._auth()
+        async with self._client(cookies) as client:
+            resp = await client.request(
+                method, f"{self._base()}{path}",
+                json=payload, headers={"X-CSRF-Token": csrf},
+            )
+            if resp.status_code in (401, 403):
+                _AUTH_CACHE.pop(self.node.id, None)
+                cookies, csrf = await self._auth()
+                async with self._client(cookies) as client2:
+                    resp = await client2.request(
+                        method, f"{self._base()}{path}",
+                        json=payload, headers={"X-CSRF-Token": csrf},
+                    )
             if resp.status_code >= 400:
                 raise RuntimeError(f"3x-ui {method} {path}: HTTP {resp.status_code} {resp.text[:200]}")
-            if data is None:
-                raise RuntimeError(f"3x-ui {method} {path}: non-JSON response")
-            # Панель отвечает HTTP 200 даже при ошибке — признак в поле success.
+            data = resp.json()
             if isinstance(data, dict) and data.get("success") is False:
-                raise RuntimeError(f"3x-ui {method} {path}: {data.get('msg', 'unknown error')}")
+                raise RuntimeError(f"3x-ui {path}: {data.get('msg') or 'api error'}")
             return data
 
     def _inbound_id(self) -> int:
@@ -132,13 +117,12 @@ class ThreeXuiAdapter(VpnAdapter):
         return settings or {}
 
     async def _mutate_clients(self, mutator) -> None:
-        with _PANEL_LOCK:
-            inbound = await self._get_inbound()
-            settings = self._parse_settings(inbound)
-            settings["clients"] = mutator(settings.get("clients", []))
-            payload = {k: inbound.get(k) for k in INBOUND_KEYS if k in inbound}
-            payload["settings"] = json.dumps(settings, ensure_ascii=False)
-            await self._request("POST", f"/panel/api/inbounds/update/{self._inbound_id()}", payload)
+        inbound = await self._get_inbound()
+        settings = self._parse_settings(inbound)
+        settings["clients"] = mutator(settings.get("clients", []))
+        payload = {k: inbound.get(k) for k in INBOUND_KEYS if k in inbound}
+        payload["settings"] = json.dumps(settings, ensure_ascii=False)
+        await self._request("POST", f"/panel/api/inbounds/update/{self._inbound_id()}", payload)
 
     def _client_obj(self, account_uuid: str, email: str, sub_id: str, enable: bool) -> dict:
         return {
@@ -160,7 +144,7 @@ class ThreeXuiAdapter(VpnAdapter):
 
     async def create_account(self, db, service, product) -> dict:
         account_uuid = security.new_uuid()
-        email = f"u{service.user_id}_{hashlib.sha256(str(service.id).encode()).hexdigest()[:8]}@itkam34.ru"
+        email = f"u{service.user_id}_{security.new_sub_id()[:8]}@itkam34.ru"
         sub_id = security.new_sub_id()
         obj = self._client_obj(account_uuid, email, sub_id, True)
 
@@ -219,9 +203,9 @@ class ThreeXuiAdapter(VpnAdapter):
         link = (
             f"vless://{account.uuid}@{self.node.endpoint_host}:{self.node.endpoint_port}"
             f"?encryption=none&flow=xtls-rprx-vision&security=reality"
-            f"&sni={extra.get('sni', '')}&fp={extra.get('fp', 'firefox')}"
+            f"&sni={extra.get('sni', '')}&fp={extra.get('fp', 'chrome')}"
             f"&pbk={extra.get('pbk', '')}&sid={extra.get('sid', '')}&spx=%2F"
-            f"&type=tcp&headerType=none#{quote(account.username or '', safe='')}"
+            f"&type=tcp&headerType=none#{account.username}"
         )
         sub_base = extra.get("subscription_base")
         sub_url = f"{sub_base}/sub/{account.extra.get('sub_id', '')}" if sub_base else None

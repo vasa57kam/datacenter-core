@@ -28,6 +28,11 @@ def sync_job():
     sync.sync_vless_limits()
 
 
+@scheduler.scheduled_job("interval", seconds=300)
+def recover_job():
+    provisioning.recover_stuck_tasks()
+
+
 @scheduler.scheduled_job("interval", seconds=settings.provisioning_interval_seconds)
 def provisioning_job():
     provisioning.process_pending_tasks_sync()
