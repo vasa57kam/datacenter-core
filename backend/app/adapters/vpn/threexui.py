@@ -121,7 +121,6 @@ class ThreeXuiAdapter(VpnAdapter):
             "email": email,
             "enable": True,
             "expiryTime": 0,
-            "flow": "xtls-rprx-vision",
             "id": uuid,
             "limitIp": 0,
             "subId": sub_id,
@@ -156,7 +155,6 @@ class ThreeXuiAdapter(VpnAdapter):
             "email": account.username,
             "enable": bool(enable),
             "expiryTime": int(expiry_ms),
-            "flow": cur.get("flow") or "xtls-rprx-vision",
             "id": cur.get("uuid") or account.uuid,
             "subId": cur.get("subId") or (account.extra or {}).get("sub_id", ""),
             "limitIp": cur.get("limitIp") or 0,
@@ -198,7 +196,7 @@ class ThreeXuiAdapter(VpnAdapter):
         
         link = (
             f"vless://{account.uuid}@{self.node.endpoint_host}:{self.node.endpoint_port}"
-            f"?encryption=none&flow=xtls-rprx-vision&security=reality"
+            f"?encryption=none&security=reality"
             f"&sni={sni}&fp={fp}"
             f"&pbk={pbk}&sid={sid}&spx={spx}"
             f"&type=tcp&headerType=none#{account.username}"
