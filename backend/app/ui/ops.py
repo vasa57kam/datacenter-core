@@ -5,7 +5,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.core import security
 from app.db import get_db
+from app.models import User
 from app.services.node_import import import_node_from_inbound
 from app.services.tariffs import UNITS, ensure_tariffs
 
@@ -102,3 +104,64 @@ def tariffs_submit(
             request, "ops/tariffs.html",
             {"error": str(e), "ok": "", "units": UNITS}, status_code=400,
         )
+
+
+@router.get("/password", response_class=HTMLResponse)
+def password_self_page(request: Request, error: str = "", ok: str = ""):
+    r = _guard(request)
+    if r:
+        return r
+    return templates.TemplateResponse(request, "ops/password_self.html", {"error": error, "ok": ok})
+
+
+@router.post("/password")
+def password_self(
+    request: Request,
+    current: str = Form(),
+    new: str = Form(min_length=8),
+    confirm: str = Form(),
+    db: Session = Depends(get_db),
+):
+    r = _guard(request)
+    if r:
+        return r
+    user = db.get(User, int(request.session.get("admin_uid")))
+    if user is None or not security.verify_password(current, user.password_hash):
+        return templates.TemplateResponse(request, "ops/password_self.html",
+                                          {"error": "Неверный текущий пароль", "ok": ""}, status_code=400)
+    if new != confirm:
+        return templates.TemplateResponse(request, "ops/password_self.html",
+                                          {"error": "Пароли не совпадают", "ok": ""}, status_code=400)
+    user.password_hash = security.hash_password(new)
+    db.commit()
+    return RedirectResponse("/admin-ops/password?ok=Пароль+изменён", status_code=303)
+
+
+@router.get("/passwords", response_class=HTMLResponse)
+def passwords_page(request: Request, error: str = "", ok: str = "", db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    from sqlalchemy import select
+    users = db.execute(select(User).order_by(User.id)).scalars().all()
+    return templates.TemplateResponse(request, "ops/passwords.html",
+                                      {"error": error, "ok": ok, "users": users})
+
+
+@router.post("/passwords")
+def passwords_set(
+    request: Request,
+    user_id: int = Form(),
+    new: str = Form(min_length=8),
+    db: Session = Depends(get_db),
+):
+    r = _guard(request)
+    if r:
+        return r
+    from sqlalchemy import select
+    user = db.get(User, user_id)
+    if user is None:
+        return RedirectResponse("/admin-ops/passwords?error=Пользователь+не+найден", status_code=303)
+    user.password_hash = security.hash_password(new)
+    db.commit()
+    return RedirectResponse(f"/admin-ops/passwords?ok=Пароль+{user.email}+изменён", status_code=303)
