@@ -58,11 +58,11 @@ def report_usage(db, node: VpnNode, item) -> UsageSession | None:
         if item.external_session_id and not session.external_session_id:
             session.external_session_id = item.external_session_id
 
-    delta = (item.rx_bytes + item.tx_bytes) - (session.rx_bytes + session.tx_bytes)
+    delta = ((item.rx_bytes or 0) + (item.tx_bytes or 0)) - ((session.rx_bytes or 0) + (session.tx_bytes or 0))
     if delta > 0:
         session.traffic_pending_bytes = (session.traffic_pending_bytes or 0) + delta
-    session.rx_bytes = item.rx_bytes
-    session.tx_bytes = item.tx_bytes
+    session.rx_bytes = item.rx_bytes or 0
+    session.tx_bytes = item.tx_bytes or 0
     db.flush()
     return session
 
