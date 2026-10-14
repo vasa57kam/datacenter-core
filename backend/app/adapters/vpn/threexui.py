@@ -187,12 +187,20 @@ class ThreeXuiAdapter(VpnAdapter):
         }
 
     def render_config(self, db, account) -> dict:
-        extra = self.node.extra
+        extra = self.node.extra or {}
+        # Берём Reality-параметры из node.extra.reality_settings (если есть) или из node.extra напрямую
+        rs = extra.get("reality_settings") or extra
+        sni = rs.get("sni", "")
+        pbk = rs.get("pbk", "")
+        sid = rs.get("sid", "")
+        fp = rs.get("fp", "chrome")
+        spx = rs.get("spx", "/")
+        
         link = (
             f"vless://{account.uuid}@{self.node.endpoint_host}:{self.node.endpoint_port}"
             f"?encryption=none&flow=xtls-rprx-vision&security=reality"
-            f"&sni={extra.get('sni', '')}&fp={extra.get('fp', 'chrome')}"
-            f"&pbk={extra.get('pbk', '')}&sid={extra.get('sid', '')}&spx=%2F"
+            f"&sni={sni}&fp={fp}"
+            f"&pbk={pbk}&sid={sid}&spx={spx}"
             f"&type=tcp&headerType=none#{account.username}"
         )
         sub_base = extra.get("subscription_base")
