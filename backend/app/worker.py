@@ -1,7 +1,28 @@
+"""Background worker: provisioning, usage billing, sync, recovery."""
+from __future__ import annotations
+
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.core.config import settings
 from app.services import provisioning, sync, usage, usage_agent
+
+log = logging.getLogger(__name__)
+
+# Отдельный пул для async-задач usage_agent (чтобы не блокировать scheduler)
+_usage_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="usage")
+
+
+def _run_usage_agent() -> None:
+    """Обёртка: запускаем asyncio.run в отдельном потоке."""
+    import asyncio
+    try:
+        asyncio.run(usage_agent.poll_node_usage_async())
+    except Exception:
+        log.exception("usage agent job failed")
+
 
 scheduler = BlockingScheduler(timezone="UTC")
 
@@ -18,7 +39,7 @@ def stale_job():
 
 @scheduler.scheduled_job("interval", seconds=60, coalesce=True, max_instances=1)
 def usage_agent_job():
-    usage_agent.poll_node_usage()
+    _usage_pool.submit(_run_usage_agent)
 
 
 @scheduler.scheduled_job("interval", seconds=60, coalesce=True, max_instances=1)
@@ -37,5 +58,5 @@ def provisioning_job():
 
 
 if __name__ == "__main__":
-    print("billing worker started", flush=True)
+    log.info("billing worker started")
     scheduler.start()
