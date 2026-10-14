@@ -24,7 +24,14 @@
         <h3 style="margin-top:20px">QR-код подписки</h3>
         <div class="qr">{{ qr_svg | safe }}</div>
         <p class="note">Наведи камеру в v2rayNG / Hiddify / Shadowrocket — приложение импортирует подписку.</p>
+      {% else %}
+        <p class="note" style="color:#f85149">QR-код не сгенерирован (библиотека qrcode не установлена)</p>
       {% endif %}
+    </div>
+  {% else %}
+    <div class="note-box" style="background:#3d1418;border-color:#f85149">
+      <h3 style="margin-top:0;color:#f85149">⚠ URL подписки недоступен</h3>
+      <p>Проверьте что у аккаунта есть sub_id в extra.</p>
     </div>
   {% endif %}
 
@@ -33,7 +40,7 @@
       <summary style="cursor:pointer;color:#58a6ff">Прямая ссылка vless:// (для опытных пользователей)</summary>
       <div class="sub-url" style="margin-top:10px">{{ link }}</div>
       <button class="btn-copy" onclick="navigator.clipboard.writeText('{{ link }}'); this.textContent='Скопировано!'; setTimeout(()=>this.textContent='Скопировать', 2000)">Скопировать</button>
-      <p class="note" style="margin-top:8px">️ Прямая ссылка может не работать в новых версиях 3x-ui. Используйте URL подписки выше.</p>
+      <p class="note" style="margin-top:8px">⚠️ Прямая ссылка может не работать в новых версиях 3x-ui. Используйте URL подписки выше.</p>
     </details>
   {% endif %}
 
