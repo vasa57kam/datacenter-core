@@ -2,28 +2,46 @@
 {% block title %}Конфиг{% endblock %}
 {% block content %}
 <style>
-  .qr { background:#fff; padding:14px; border-radius:10px; display:inline-block; }
+  .qr { background:#fff; padding:14px; border-radius:10px; display:inline-block; margin:10px 0; }
   .qr svg { width:230px; height:230px; display:block; }
+  .sub-url { background:#161b22; border:1px solid #30363d; padding:12px; border-radius:8px; margin:16px 0; word-break:break-all; font-family:monospace; font-size:13px; }
+  .btn-copy { background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; margin:4px; }
+  .btn-copy:hover { background:#2ea043; }
+  .note-box { background:#0f2d1a; border:1px solid #3fb950; padding:12px; border-radius:8px; margin:16px 0; }
 </style>
 <div class="card">
   <h2>{{ service.name }}</h2>
   <p>Состояние: <span id="svc-status" class="st-{{ service.status }}">{{ service.status | ru_status }}</span></p>
-  {% if link %}
-    <h3 style="margin-top:24px">Ссылка подключения</h3>
-    <pre id="vless-link">{{ link }}</pre>
-    <button onclick="navigator.clipboard.writeText(document.getElementById('vless-link').textContent.trim())">Скопировать</button>
-    {% if sub_url %}<p class="note" style="margin-top:12px">Подписка: {{ sub_url }}</p>{% endif %}
-    <h3 style="margin-top:28px">QR-код для телефона</h3>
-    <div class="qr">{{ qr_svg | safe }}</div>
-    <p class="note">Наведи камеру в v2rayNG / Shadowrocket / Happ — приложение само прочитает ссылку.</p>
-  {% else %}
-    <p class="note">Конфиг ещё не выпущен — услуга не активна или аккаунт не создан. Страница обновится сама, когда всё будет готово.</p>
+
+  {% if sub_url %}
+    <div class="note-box">
+      <h3 style="margin-top:0;color:#3fb950">✓ URL подписки (рекомендуется)</h3>
+      <p style="margin:8px 0">Скопируйте эту ссылку и импортируйте в v2rayNG / Hiddify / Shadowrocket:</p>
+      <div class="sub-url">{{ sub_url }}</div>
+      <button class="btn-copy" onclick="navigator.clipboard.writeText('{{ sub_url }}'); this.textContent='Скопировано!'; setTimeout(()=>this.textContent='Скопировать', 2000)">Скопировать</button>
+      
+      {% if qr_svg %}
+        <h3 style="margin-top:20px">QR-код подписки</h3>
+        <div class="qr">{{ qr_svg | safe }}</div>
+        <p class="note">Наведи камеру в v2rayNG / Hiddify / Shadowrocket — приложение импортирует подписку.</p>
+      {% endif %}
+    </div>
   {% endif %}
+
+  {% if link %}
+    <details style="margin-top:20px">
+      <summary style="cursor:pointer;color:#58a6ff">Прямая ссылка vless:// (для опытных пользователей)</summary>
+      <div class="sub-url" style="margin-top:10px">{{ link }}</div>
+      <button class="btn-copy" onclick="navigator.clipboard.writeText('{{ link }}'); this.textContent='Скопировано!'; setTimeout(()=>this.textContent='Скопировать', 2000)">Скопировать</button>
+      <p class="note" style="margin-top:8px">️ Прямая ссылка может не работать в новых версиях 3x-ui. Используйте URL подписки выше.</p>
+    </details>
+  {% endif %}
+
   <p style="margin-top:28px"><a href="/lk/" class="btn secondary">← Назад в кабинет</a></p>
 </div>
 <script>
   const sid = {{ service.id }};
-  let hasLink = {{ 'true' if link else 'false' }};
+  let hasLink = {{ 'true' if (sub_url or link) else 'false' }};
   async function tick() {
     try {
       const r = await fetch('/lk/services/' + sid + '/status.json');
