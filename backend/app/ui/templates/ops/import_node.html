@@ -18,6 +18,18 @@
 </div>
 <label>Хост для клиентов (пусто = как у первой ноды)</label>
 <input name="endpoint_host" placeholder="vps.itkam34.ru">
+<div class="card" style="margin-top:16px;background:#0d1117">
+<h2 style="font-size:16px">Внешняя панель (если нода на другом сервере)</h2>
+<p class="note">Оставьте пустым — возьмутся реквизиты первой ноды. API-токен берётся в панели: Настройки → Безопасность → API Token (приоритетнее логина/пароля).</p>
+<label>URL панели</label>
+<input name="api_url" placeholder="https://host:3434/basePath">
+<div class="row">
+<div><label>Логин</label><input name="api_user"></div>
+<div><label>Пароль</label><input type="password" name="api_key"></div>
+</div>
+<label>или API-токен (Bearer)</label>
+<input name="api_token" placeholder="токен из настроек панели">
+</div>
 <p style="margin-top:18px"><button class="btn" type="submit">Импортировать ноду</button></p>
 </form>
 </div>

@@ -46,6 +46,10 @@ def import_submit(
     name: str = Form(""),
     country: str = Form("NL"),
     endpoint_host: str = Form(""),
+    api_url: str = Form(""),
+    api_user: str = Form(""),
+    api_key: str = Form(""),
+    api_token: str = Form(""),
     db: Session = Depends(get_db),
 ):
     r = _guard(request)
@@ -59,6 +63,10 @@ def import_submit(
             name=name.strip() or None,
             country=country.strip() or "NL",
             endpoint_host=endpoint_host.strip() or None,
+            api_url=api_url.strip() or None,
+            api_user=api_user.strip() or None,
+            api_key=api_key.strip() or None,
+            api_token=api_token.strip() or None,
         )
         db.commit()
         return RedirectResponse(f"/admin-ops/nodes/import?ok=Нода+{node.code}+создана+inbound+{node.extra.get('inbound_id')}+порт+{node.endpoint_port}", status_code=303)

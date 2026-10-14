@@ -26,6 +26,7 @@ class NodeImport(BaseModel):
     api_url: str | None = None
     api_user: str | None = None
     api_key: str | None = None
+    api_token: str | None = None
 
 
 class QuickTariffs(BaseModel):

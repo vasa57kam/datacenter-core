@@ -20,6 +20,7 @@ def import_node_from_inbound(
     api_url: str | None = None,
     api_user: str | None = None,
     api_key: str | None = None,
+    api_token: str | None = None,
 ) -> VpnNode:
     from app.adapters.vpn.threexui import ThreeXuiAdapter
 
@@ -27,16 +28,31 @@ def import_node_from_inbound(
         inbound = json.loads(inbound)
 
     base = db.execute(select(VpnNode).where(VpnNode.api_kind == "3xui")).scalars().first()
-    api_url = api_url or (base.api_url if base else None)
-    api_user = api_user or (base.api_user if base else None)
-    api_key = api_key or (security.decrypt_secret(base.api_key_enc) if base and base.api_key_enc else None)
-    if not api_url or not api_user or not api_key:
-        raise ValueError("Нет реквизитов панели: создай хотя бы одну ноду или укажи api_url/api_user/api_key")
+
+    auth_mode = None
+    if api_token:
+        auth_mode = "token"
+        api_url = api_url or (base.api_url if base else None)
+        api_user = api_user or "api-token"
+        secret = api_token
+    elif api_url:
+        if not api_user or not api_key:
+            raise ValueError("Для внешней панели укажите логин и пароль (или API-токен)")
+        secret = api_key
+    else:
+        if base is None:
+            raise ValueError("Нет ни одной ноды: укажите URL панели и реквизиты")
+        api_url = base.api_url
+        api_user = base.api_user
+        secret = security.decrypt_secret(base.api_key_enc) if base.api_key_enc else None
+        auth_mode = (base.extra or {}).get("auth_mode")
+        if not secret:
+            raise ValueError("У базовой ноды нет реквизитов панели")
 
     tmp = SimpleNamespace(
         id=0, api_url=api_url, api_user=api_user,
-        api_key_enc=security.encrypt_secret(api_key),
-        extra={"verify_tls": False},
+        api_key_enc=security.encrypt_secret(secret),
+        extra={"verify_tls": False, **({"auth_mode": "token"} if auth_mode == "token" else {})},
     )
     adapter = ThreeXuiAdapter(tmp)
 
@@ -73,11 +89,15 @@ def import_node_from_inbound(
         api_kind="3xui",
         api_url=api_url,
         api_user=api_user,
-        api_key_enc=security.encrypt_secret(api_key),
+        api_key_enc=security.encrypt_secret(secret),
         endpoint_host=endpoint_host or (base.endpoint_host if base else ""),
         endpoint_port=port,
         active=True,
-        extra={"inbound_id": inbound_id, "sni": sni, "pbk": pbk, "sid": sid, "fp": fp, "spider_x": spx},
+        extra={
+            "inbound_id": inbound_id, "sni": sni, "pbk": pbk, "sid": sid,
+            "fp": fp, "spider_x": spx,
+            **({"auth_mode": "token"} if auth_mode == "token" else {}),
+        },
     )
     db.add(node)
     db.flush()

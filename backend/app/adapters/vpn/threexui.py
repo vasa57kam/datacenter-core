@@ -17,13 +17,16 @@ _AUTH_TTL = 600
 
 
 class ThreeXuiAdapter(VpnAdapter):
-    """3x-ui new-generation panel: clients are first-class entities (/panel/api/clients/*)."""
-
     def _base(self) -> str:
         return self.node.api_url.rstrip("/")
 
     def _password(self) -> str:
         return security.decrypt_secret(self.node.api_key_enc)
+
+    def _token(self) -> str | None:
+        if (self.node.extra or {}).get("auth_mode") == "token" and self.node.api_key_enc:
+            return security.decrypt_secret(self.node.api_key_enc)
+        return None
 
     def _client(self, cookies: dict | None = None) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -60,6 +63,20 @@ class ThreeXuiAdapter(VpnAdapter):
         return cookies, csrf
 
     async def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
+        token = self._token()
+        if token:
+            async with self._client() as client:
+                resp = await client.request(
+                    method, f"{self._base()}{path}",
+                    json=payload, headers={"Authorization": f"Bearer {token}"},
+                )
+            if resp.status_code >= 400:
+                raise RuntimeError(f"3x-ui {method} {path}: HTTP {resp.status_code} {resp.text[:200]}")
+            data = resp.json()
+            if isinstance(data, dict) and data.get("success") is False:
+                raise RuntimeError(f"3x-ui {path}: {data.get('msg') or 'api error'}")
+            return data
+
         cookies, csrf = await self._auth()
         async with self._client(cookies) as client:
             resp = await client.request(
@@ -87,6 +104,14 @@ class ThreeXuiAdapter(VpnAdapter):
     async def _get_client(self, email: str) -> dict | None:
         data = await self._request("GET", f"/panel/api/clients/get/{quote(email)}")
         return data.get("obj") or None
+
+    async def fetch_onlines(self) -> list[str]:
+        data = await self._request("POST", "/panel/api/clients/onlines", {})
+        return data.get("obj") or []
+
+    async def fetch_traffic(self, email: str) -> dict:
+        data = await self._request("GET", f"/panel/api/clients/traffic/{quote(email)}")
+        return data.get("obj") or {}
 
     async def create_account(self, db, service, product) -> dict:
         uuid = security.new_uuid()
@@ -118,14 +143,10 @@ class ThreeXuiAdapter(VpnAdapter):
         }
 
     async def suspend_account(self, db, account) -> None:
-        await self._request(
-            "POST", "/panel/api/clients/bulkDisable", {"emails": [account.username]}
-        )
+        await self._request("POST", "/panel/api/clients/bulkDisable", {"emails": [account.username]})
 
     async def resume_account(self, db, account) -> None:
-        await self._request(
-            "POST", "/panel/api/clients/bulkEnable", {"emails": [account.username]}
-        )
+        await self._request("POST", "/panel/api/clients/bulkEnable", {"emails": [account.username]})
 
     async def push_limits(self, account, expiry_ms: int, enable: bool) -> None:
         cur = await self._get_client(account.username)
@@ -144,9 +165,7 @@ class ThreeXuiAdapter(VpnAdapter):
             "tgId": cur.get("tgId") or 0,
             "comment": cur.get("comment") or "",
         }
-        await self._request(
-            "POST", f"/panel/api/clients/update/{quote(account.username)}", payload
-        )
+        await self._request("POST", f"/panel/api/clients/update/{quote(account.username)}", payload)
 
     async def delete_account(self, db, account) -> None:
         await self._request(
@@ -166,14 +185,6 @@ class ThreeXuiAdapter(VpnAdapter):
             "up": traffic.get("up"),
             "down": traffic.get("down"),
         }
-
-    async def fetch_onlines(self) -> list[str]:
-        data = await self._request("POST", "/panel/api/clients/onlines", {})
-        return data.get("obj") or []
-
-    async def fetch_traffic(self, email: str) -> dict:
-        data = await self._request("GET", f"/panel/api/clients/traffic/{quote(email)}")
-        return data.get("obj") or {}
 
     def render_config(self, db, account) -> dict:
         extra = self.node.extra
