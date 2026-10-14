@@ -82,6 +82,13 @@ def _execute_create(db: Session, service: ServiceInstance) -> dict:
             )
         except ledger.InsufficientFunds:
             raise ValueError("Insufficient balance for prepaid activation")
+    extra_data = result.get("extra") or {}
+    if not isinstance(extra_data, dict):
+        extra_data = {}
+    # Гарантируем что sub_id есть в extra
+    if "sub_id" not in extra_data and result.get("username"):
+        extra_data["sub_id"] = result["username"].split("@")[0]
+    
     account = VpnAccount(
         service_instance_id=service.id,
         node_id=node.id,
@@ -92,7 +99,7 @@ def _execute_create(db: Session, service: ServiceInstance) -> dict:
         secret_enc=result["secret_enc"],
         public_key=result.get("public_key"),
         status="active",
-        extra=result.get("extra", {}),
+        extra=extra_data,
     )
     db.add(account)
     service.status = "active"
