@@ -382,9 +382,38 @@ def setup_admin(app, secret_key: str) -> None:
         authentication_backend=auth,
         title="ITKAM34 Billing",
         base_url="/admin",
-        templates_dir="app/ui/admin_templates",
     )
     for view in (UserAdmin, WalletAdmin, LedgerAdmin, ProductAdmin, ServiceAdmin,
                  NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):
         admin.add_view(view)
+
+    try:
+        from sqladmin import BaseView
+        from starlette.responses import RedirectResponse as _RR
+
+        class QuickOpsView(BaseView):
+            path = "/admin/ops"
+            title = "Быстрые операции"
+            icon = "fa fa-bolt"
+            add_to_menu = True
+            methods = ["GET"]
+
+            async def dispatch(self, request):
+                return _RR("/admin-ops/", status_code=302)
+
+        class HelpKBView(BaseView):
+            path = "/admin/kb"
+            title = "База знаний"
+            icon = "fa fa-book"
+            add_to_menu = True
+            methods = ["GET"]
+
+            async def dispatch(self, request):
+                return _RR("/admin-help", status_code=302)
+
+        admin.add_view(QuickOpsView)
+        admin.add_view(HelpKBView)
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("custom admin menu skipped: %s", exc)
 
