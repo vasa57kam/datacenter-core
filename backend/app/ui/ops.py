@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import security
@@ -24,17 +25,14 @@ def _guard(request: Request):
 @router.get("/", response_class=HTMLResponse)
 def ops_home(request: Request):
     r = _guard(request)
-    if r:
-        return r
-    return templates.TemplateResponse(request, "ops/home.html", {})
+    return r or templates.TemplateResponse(request, "ops/home.html", {})
 
 
 @router.get("/nodes/import", response_class=HTMLResponse)
 def import_page(request: Request, error: str = "", ok: str = ""):
     r = _guard(request)
-    if r:
-        return r
-    return templates.TemplateResponse(request, "ops/import_node.html", {"error": error, "ok": ok, "inbound_json": ""})
+    return r or templates.TemplateResponse(request, "ops/import_node.html",
+                                           {"error": error, "ok": ok, "inbound_json": ""})
 
 
 @router.post("/nodes/import")
@@ -69,21 +67,21 @@ def import_submit(
             api_token=api_token.strip() or None,
         )
         db.commit()
-        return RedirectResponse(f"/admin-ops/nodes/import?ok=Нода+{node.code}+создана+inbound+{node.extra.get('inbound_id')}+порт+{node.endpoint_port}", status_code=303)
+        return RedirectResponse(
+            f"/admin-ops/nodes/import?ok=Нода+{node.code}+создана+inbound+{node.extra.get('inbound_id')}+порт+{node.endpoint_port}",
+            status_code=303)
     except Exception as e:
         db.rollback()
-        return templates.TemplateResponse(
-            request, "ops/import_node.html",
-            {"error": str(e), "ok": "", "inbound_json": inbound_json}, status_code=400,
-        )
+        return templates.TemplateResponse(request, "ops/import_node.html",
+                                          {"error": str(e), "ok": "", "inbound_json": inbound_json},
+                                          status_code=400)
 
 
 @router.get("/tariffs", response_class=HTMLResponse)
 def tariffs_page(request: Request, error: str = "", ok: str = ""):
     r = _guard(request)
-    if r:
-        return r
-    return templates.TemplateResponse(request, "ops/tariffs.html", {"error": error, "ok": ok, "units": UNITS})
+    return r or templates.TemplateResponse(request, "ops/tariffs.html",
+                                           {"error": error, "ok": ok, "units": UNITS})
 
 
 @router.post("/tariffs")
@@ -101,25 +99,24 @@ def tariffs_submit(
     if r:
         return r
     try:
-        prices = {"second": price_second, "minute": price_minute, "gb": price_gb, "month": price_month}
-        res = ensure_tariffs(db, protocol.strip() or "vless", country.strip() or "NL", prices)
+        res = ensure_tariffs(db, protocol.strip() or "vless", country.strip() or "NL",
+                             {"second": price_second, "minute": price_minute,
+                              "gb": price_gb, "month": price_month})
         db.commit()
         created = sum(1 for x in res if x["created"])
-        return RedirectResponse(f"/admin-ops/tariffs?ok=Готово+создано+{created}+обновлено+{len(res)-created}", status_code=303)
+        return RedirectResponse(
+            f"/admin-ops/tariffs?ok=Готово+создано+{created}+обновлено+{len(res) - created}",
+            status_code=303)
     except Exception as e:
         db.rollback()
-        return templates.TemplateResponse(
-            request, "ops/tariffs.html",
-            {"error": str(e), "ok": "", "units": UNITS}, status_code=400,
-        )
+        return templates.TemplateResponse(request, "ops/tariffs.html",
+                                          {"error": str(e), "ok": "", "units": UNITS}, status_code=400)
 
 
 @router.get("/password", response_class=HTMLResponse)
 def password_self_page(request: Request, error: str = "", ok: str = ""):
     r = _guard(request)
-    if r:
-        return r
-    return templates.TemplateResponse(request, "ops/password_self.html", {"error": error, "ok": ok})
+    return r or templates.TemplateResponse(request, "ops/password_self.html", {"error": error, "ok": ok})
 
 
 @router.post("/password")
@@ -150,7 +147,6 @@ def passwords_page(request: Request, error: str = "", ok: str = "", db: Session 
     r = _guard(request)
     if r:
         return r
-    from sqlalchemy import select
     users = db.execute(select(User).order_by(User.id)).scalars().all()
     return templates.TemplateResponse(request, "ops/passwords.html",
                                       {"error": error, "ok": ok, "users": users})
@@ -166,7 +162,6 @@ def passwords_set(
     r = _guard(request)
     if r:
         return r
-    from sqlalchemy import select
     user = db.get(User, user_id)
     if user is None:
         return RedirectResponse("/admin-ops/passwords?error=Пользователь+не+найден", status_code=303)

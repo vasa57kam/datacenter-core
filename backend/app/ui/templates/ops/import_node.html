@@ -6,7 +6,7 @@
 {% if error %}<div class="err">{{ error }}</div>{% endif %}
 {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
 <form method="post" action="/admin-ops/nodes/import">
-<label>JSON входящего подключения (из 3x-ui: входящие → изменить → расширенный шаблон / экспорт)</label>
+<label>JSON входящего подключения (3x-ui → входящие → изменить → полный JSON)</label>
 <textarea name="inbound_json" required placeholder='{"listen":"","port":39628,"protocol":"vless",...}'>{{ inbound_json }}</textarea>
 <div class="row">
 <div><label>Inbound ID (0 = создать новый в панели)</label><input type="number" name="inbound_id" value="0"></div>
@@ -19,8 +19,8 @@
 <label>Хост для клиентов (пусто = как у первой ноды)</label>
 <input name="endpoint_host" placeholder="vps.itkam34.ru">
 <div class="card" style="margin-top:16px;background:#0d1117">
-<h2 style="font-size:16px">Внешняя панель (если нода на другом сервере)</h2>
-<p class="note">Оставьте пустым — возьмутся реквизиты первой ноды. API-токен берётся в панели: Настройки → Безопасность → API Token (приоритетнее логина/пароля).</p>
+<h2>Внешняя панель (если нода на другом сервере)</h2>
+<p class="note">Оставьте пустым — возьмутся реквизиты первой ноды. API-токен: панель → Настройки → Безопасность → API Token (приоритетнее логина/пароля).</p>
 <label>URL панели</label>
 <input name="api_url" placeholder="https://host:3434/basePath">
 <div class="row">
