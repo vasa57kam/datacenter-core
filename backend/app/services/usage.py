@@ -17,7 +17,7 @@ PREPAID_UNITS = {"month", "one_time"}
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(MSK)
 
 
 def report_usage(db, node: VpnNode, item) -> UsageSession | None:

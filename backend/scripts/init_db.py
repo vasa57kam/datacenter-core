@@ -28,6 +28,10 @@ CONSTRAINT_FIXES = [
 
 def main():
     Base.metadata.create_all(bind=engine)
+    # Устанавливаем часовой пояс базы данных на Московский
+    with engine.begin() as conn:
+        conn.execute(text("SET TIME ZONE 'Europe/Moscow'"))
+        conn.execute(text("ALTER DATABASE billing SET TIMEZONE TO 'Europe/Moscow'"))
     with engine.begin() as conn:
         for sql in FK_CASCADE_FIXES + CONSTRAINT_FIXES:
             conn.execute(text(sql))

@@ -37,7 +37,7 @@ def enqueue_task(
     if existing:
         return existing
 
-    idem_key = f"{entity_type}:{entity_id}:{action}:{int(datetime.now(timezone.utc).timestamp())}"
+    idem_key = f"{entity_type}:{entity_id}:{action}:{int(datetime.now(MSK).timestamp())}"
     task = ProvisioningTask(
         entity_type=entity_type,
         entity_id=entity_id,
@@ -156,7 +156,7 @@ ACTION_HANDLERS = {
 def recover_stuck_tasks() -> None:
     db = SessionLocal()
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+        cutoff = datetime.now(MSK) - timedelta(minutes=10)
         stuck = db.execute(
             select(ProvisioningTask).where(
                 ProvisioningTask.status == "running",
