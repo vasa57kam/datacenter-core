@@ -180,7 +180,7 @@ def setup_admin(app, secret_key: str = ""):
         app.add_middleware(SessionMiddleware, secret_key=secret_key or "itkam34-billing-sessions")
     admin = Admin(
         app, engine,
-        authentication_backend=AdminAuth(),
+        authentication_backend=AdminAuth(secret_key or "itkam34-billing-sessions"),
         title="ITKAM34 Billing",
         base_url="/admin",
     )

@@ -100,7 +100,7 @@ a{color:#58a6ff}
 {сюда вставить JSON inbound}
 JSON
 source /root/billing-creds.env
-TOKEN=$(curl -s -X POST http://127.0.0.1:8008/api/v1/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" | sed 's/.*"access_token":"\([^"]*\)".*/\1/')
+TOKEN=$(curl -s -X POST http://127.0.0.1:8008/api/v1/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" | sed 's/.*"access_token":"\\([^"]*\\)".*/\\1/')
 python3 - &lt;&lt;'PY'
 import json, os, urllib.request
 payload = {"inbound": json.load(open("/tmp/inbound.json")), "country": "NL", "endpoint_host": "vps.itkam34.ru"}
