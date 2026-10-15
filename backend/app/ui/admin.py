@@ -12,8 +12,8 @@ from starlette.responses import RedirectResponse
 from app.core import security
 from app.db import SessionLocal, engine
 from app.models import (
-    LedgerEntry, PaymentRequest, Product, ProvisioningTask, ServiceInstance,
-    UsageSession, User, VpnAccount, VpnNode, Wallet,
+    Coupon, LedgerEntry, PaymentRequest, Product, ProvisioningTask,
+    ServiceInstance, UsageSession, User, VpnAccount, VpnNode, Wallet,
 )
 from app.services import ledger
 
@@ -54,7 +54,9 @@ class UserAdmin(ModelView, model=User):
 
 
 class WalletAdmin(ModelView, model=Wallet):
-    column_list = [Wallet.id, Wallet.user_id, Wallet.balance_minor]
+    column_list = [Wallet.id, Wallet.user_id, Wallet.balance_minor, Wallet.promise_limit_minor]
+    column_editable = [Wallet.balance_minor, Wallet.promise_limit_minor]
+    can_edit = True
     name = "Кошелёк"
     name_plural = "Кошельки"
     icon = "fa fa-wallet"
@@ -199,8 +201,24 @@ _QUICK_LINKS_HTML = """<div id="admin-quicklinks" style="position:fixed;bottom:0
 <a href="/admin-ops/tariffs" style="color:#58a6ff;margin-right:14px;text-decoration:none">Тарифы</a>
 <a href="/admin-ops/tickets" style="color:#58a6ff;margin-right:14px;text-decoration:none">Тикеты</a>
 <a href="/admin-ops/passwords" style="color:#58a6ff;margin-right:14px;text-decoration:none">Пароли</a>
+<a href="/admin-ops/coupons" style="color:#58a6ff;margin-right:14px;text-decoration:none">🎟 Купоны</a>
 <a href="/admin-help" style="color:#58a6ff;text-decoration:none">📚 База знаний</a>
 </div>"""
+
+
+
+_ADMIN_CSS = """<style id="admin-redesign-css">
+:root{--tblr-primary:#16a34a;--tblr-primary-rgb:22,163,74;--tblr-link-color:#16a34a}
+body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f6fb}
+.navbar-vertical, .navbar.navbar-dark, .navbar[class*="bg-dark"]{background:#0f172a!important}
+.card{border:none!important;border-radius:14px!important;box-shadow:0 8px 24px rgba(15,23,42,.08)!important}
+.btn-primary{background:#16a34a!important;border-color:#16a34a!important}
+.btn-primary:hover{background:#15803d!important}
+.table thead th{color:#64748b!important;font-weight:600;border-bottom:2px solid #e2e8f0}
+.nav-link.active, .nav-link[aria-current="page"]{background:rgba(22,163,74,.14)!important;color:#16a34a!important;border-radius:10px}
+.badge.bg-primary{background:#16a34a!important}
+a{color:#16a34a}
+</style>"""
 
 
 class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
@@ -219,11 +237,23 @@ class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
             chunks.append(chunk if isinstance(chunk, bytes) else chunk.encode())
         html = b"".join(chunks).decode("utf-8", errors="ignore")
         media = ctype.split(";")[0]
+        if "</head>" in html and "admin-redesign-css" not in html:
+            html = html.replace("</head>", _ADMIN_CSS + "\n</head>", 1)
         if "</body>" in html and "admin-quicklinks" not in html:
             html = html.replace("</body>", _QUICK_LINKS_HTML + "\n</body>")
         headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
         return StarletteResponse(content=html, status_code=response.status_code,
                                  headers=headers, media_type=media)
+
+
+class CouponAdmin(ModelView, model=Coupon):
+    column_list = [Coupon.id, Coupon.code, Coupon.kind, Coupon.amount_minor,
+                   Coupon.max_activations, Coupon.activations_count, Coupon.active,
+                   Coupon.expires_at]
+    column_editable = [Coupon.active, Coupon.max_activations, Coupon.expires_at, Coupon.note]
+    name = "Код (купон/промо/сертификат)"
+    name_plural = "Купоны, промокоды, сертификаты"
+    icon = "fa fa-ticket"
 
 
 def setup_admin(app, secret_key: str = ""):
@@ -238,6 +268,6 @@ def setup_admin(app, secret_key: str = ""):
         base_url="/admin",
     )
     for view in (UserAdmin, WalletAdmin, LedgerAdmin, ProductAdmin, ServiceAdmin,
-                 NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):
+                 NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin, CouponAdmin):
         admin.add_view(view)
     return admin

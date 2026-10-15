@@ -39,6 +39,15 @@
   {% else %}<p class="muted">Услуг пока нет — подключите первую кнопкой «+ Подключить услугу».</p>{% endif %}
 </div>
 
+<div class="card"><h3>Купон / промокод / сертификат</h3>
+<form method="post" action="/lk/coupon">
+<label>Код</label><input name="code" placeholder="Например: GIFT-1A2B3C" style="text-transform:uppercase">
+<button class="btn" type="submit">Активировать</button>
+</form>
+{% if wallet.promise_limit_minor and wallet.promise_limit_minor > 0 %}
+<p class="muted">Обещанный платёж активен: можно уходить в минус до −{{ (wallet.promise_limit_minor / 100) | round(2) }} ₽ без остановки услуг.</p>
+{% endif %}
+</div>
 <div class="card"><h3>Заявки на пополнение</h3>
   {% if payreqs %}<table><tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th><th></th></tr>
   {% for p in payreqs %}<tr><td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ (p.amount_minor/100) | round(2) }} ₽</td><td>{{ p.method }}</td>

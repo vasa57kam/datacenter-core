@@ -32,6 +32,9 @@ RU_STATUS = {
 }
 RU_PAYREQ = {"pending": "на проверке", "approved": "зачислено", "rejected": "отклонено"}
 REASON_RU = {
+    "promo_code": "Промокод",
+    "gift_certificate": "Подарочный сертификат",
+    "coupon": "Купон",
     "vpn_usage_second": "Плата за использование (посекундно)",
     "vpn_usage_minute": "Плата за использование (поминутно)",
     "vpn_traffic_gb": "Плата за трафик (ГиБ)",
@@ -432,7 +435,8 @@ def service_resume(service_id: int, request: Request, db: Session = Depends(get_
     wallet = ledger.get_wallet(db, user.id)
     product = db.get(Product, service.product_id)
     min_balance = product.price_minor if product is not None else 1
-    if wallet.balance_minor <= 0 or wallet.balance_minor < min_balance:
+    promise = getattr(wallet, 'promise_limit_minor', 0) or 0
+    if wallet.balance_minor + promise <= 0 or wallet.balance_minor + promise < min_balance:
         raise HTTPException(status_code=402, detail="Top up balance first")
     service.status = "active"
     enqueue_task(db, "service_instance", service.id, "resume")
@@ -497,3 +501,53 @@ def ticket_reply(ticket_id: int, request: Request, body: str = Form(), db: Sessi
         ticket.updated_at = tz_now()
         db.commit()
     return RedirectResponse(f"/lk/tickets/{ticket.id}", status_code=303)
+
+
+# ================= Коды: купоны / промокоды / сертификаты =================
+
+REASON_BY_KIND = {"promo": "promo_code", "gift": "gift_certificate", "coupon": "coupon"}
+
+
+@router.post("/coupon")
+def coupon_activate(request: Request, code: str = Form(), db: Session = Depends(get_db)):
+    from app.models import Coupon, CouponActivation
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    code_clean = (code or "").strip().upper()
+    coupon = db.execute(
+        select(Coupon).where(Coupon.code == code_clean, Coupon.active.is_(True))
+    ).scalar_one_or_none()
+    error = None
+    if coupon is None:
+        error = "Код не найден или недействителен"
+    elif coupon.expires_at is not None and coupon.expires_at < tz_now():
+        error = "Срок действия кода истёк"
+    elif coupon.activations_count >= coupon.max_activations:
+        error = "Код уже использован полностью"
+    else:
+        already = db.execute(
+            select(CouponActivation).where(
+                CouponActivation.coupon_id == coupon.id, CouponActivation.user_id == user.id
+            )
+        ).scalar_one_or_none()
+        if already is not None:
+            error = "Вы уже активировали этот код"
+        else:
+            wallet = ledger.get_wallet(db, user.id)
+            ledger.credit(
+                db, wallet, coupon.amount_minor,
+                reason=REASON_BY_KIND.get(coupon.kind, "coupon"),
+                entity_type="coupon", entity_id=coupon.id,
+                idempotency_key=f"coupon:{coupon.id}:{user.id}",
+            )
+            coupon.activations_count += 1
+            db.add(CouponActivation(coupon_id=coupon.id, user_id=user.id, amount_minor=coupon.amount_minor))
+            db.commit()
+            return templates.TemplateResponse(request, "lk/coupon_result.html", {
+                "user": user, "ok": True,
+                "message": f"Код активирован: на баланс зачислено {(coupon.amount_minor / 100):.2f} ₽",
+            })
+    return templates.TemplateResponse(request, "lk/coupon_result.html", {
+        "user": user, "ok": False, "message": error or "Не удалось активировать код",
+    }, status_code=400)

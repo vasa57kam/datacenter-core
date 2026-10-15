@@ -1,0 +1,38 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Купоны{% endblock %}
+{% block content %}
+<div class="card">
+<h1>🎟 Купоны, промокоды, подарочные сертификаты</h1>
+<form method="post" action="/admin-ops/coupons/generate" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:16px 0">
+  <label>Тип<select name="kind"><option value="promo">Промокод</option><option value="gift">Подарочный сертификат</option><option value="coupon">Купон</option></select></label>
+  <label>Номинал, ₽<input name="amount" value="100"></label>
+  <label>Количество<input name="count" type="number" value="5" min="1" max="200"></label>
+  <label>Префикс<input name="prefix" placeholder="авто"></label>
+  <label>Активаций на код<input name="max_act" type="number" value="1" min="1"></label>
+  <label>Срок, дней (0=бессрочно)<input name="days" type="number" value="0" min="0"></label>
+  <div><button class="btn" type="submit">Сгенерировать</button></div>
+</form>
+{% if generated %}
+<div class="card" style="background:#0f2d1a;border:1px solid #3fb950">
+<h3>Созданные коды (сохраните сейчас)</h3>
+<textarea readonly style="width:100%;min-height:120px" onclick="this.select()">{% for c in generated %}{{ c }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+<button class="btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.value)">Скопировать все</button>
+</div>
+{% endif %}
+<table>
+<tr><th>Код</th><th>Тип</th><th>Номинал</th><th>Активаций</th><th>Срок</th><th>Статус</th><th></th></tr>
+{% for c in coupons %}
+<tr>
+  <td><code>{{ c.code }}</code></td>
+  <td>{{ {'promo':'промо','gift':'сертификат','coupon':'купон'}.get(c.kind, c.kind) }}</td>
+  <td>{{ (c.amount_minor/100) | round(2) }} ₽</td>
+  <td>{{ c.activations_count }} / {{ c.max_activations }}</td>
+  <td>{{ c.expires_at.strftime('%d.%m.%Y') if c.expires_at else '∞' }}</td>
+  <td>{% if c.active %}активен{% else %}выключен{% endif %}</td>
+  <td><form method="post" action="/admin-ops/coupons/{{ c.id }}/toggle"><button class="btn sec" type="submit">{% if c.active %}Выключить{% else %}Включить{% endif %}</button></form></td>
+</tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}

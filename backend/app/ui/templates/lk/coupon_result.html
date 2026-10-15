@@ -1,0 +1,10 @@
+{% extends "lk/base.html" %}
+{% block title %}Код{% endblock %}
+{% block content %}
+<div style="max-width:520px;margin:40px auto"><div class="card" style="text-align:center">
+{% if ok %}<div style="font-size:44px">🎉</div><h3>Готово!</h3>
+{% else %}<div style="font-size:44px">😕</div><h3>Не получилось</h3>{% endif %}
+<p>{{ message }}</p>
+<p><a class="btn" href="/lk/">В кабинет</a></p>
+</div></div>
+{% endblock %}

@@ -213,3 +213,74 @@ def ops_ticket_close(ticket_id: int, request: Request, db: Session = Depends(get
         ticket.status = "closed"
         db.commit()
     return RedirectResponse(f"/admin-ops/tickets/{ticket_id}", status_code=303)
+
+
+@router.get("/coupons", response_class=HTMLResponse)
+def ops_coupons(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    from app.models import Coupon
+    coupons = db.execute(select(Coupon).order_by(Coupon.id.desc()).limit(100)).scalars().all()
+    return templates.TemplateResponse(request, "ops/coupons.html", {"coupons": coupons, "generated": None})
+
+
+@router.post("/coupons/generate")
+def ops_coupons_generate(
+    request: Request,
+    kind: str = Form(),
+    amount: str = Form(),
+    count: int = Form(1),
+    prefix: str = Form(""),
+    max_act: int = Form(1),
+    days: int = Form(0),
+    db: Session = Depends(get_db),
+):
+    r = _guard(request)
+    if r:
+        return r
+    import secrets
+    from datetime import timedelta
+    from app.models import Coupon
+    from app.core.tz import now as tz_now2
+
+    kind = kind if kind in ("promo", "gift", "coupon") else "promo"
+    try:
+        amount_minor = int(round(float(amount.replace(",", ".")) * 100))
+    except ValueError:
+        amount_minor = 0
+    if amount_minor <= 0:
+        amount_minor = 10000
+    count = max(1, min(count, 200))
+    prefix = (prefix or {"promo": "PROMO", "gift": "GIFT", "coupon": "COUPON"}[kind]).upper().strip() or "CODE"
+    expires = tz_now2() + timedelta(days=days) if days and days > 0 else None
+
+    generated = []
+    for _ in range(count):
+        while True:
+            code = f"{prefix}-{secrets.token_hex(3).upper()}"
+            exists = db.execute(select(Coupon).where(Coupon.code == code)).scalar_one_or_none()
+            if exists is None:
+                break
+        c = Coupon(code=code, kind=kind, amount_minor=amount_minor,
+                   max_activations=max(1, max_act), expires_at=expires,
+                   note=f"batch {count} шт")
+        db.add(c)
+        generated.append(code)
+    db.commit()
+    coupons = db.execute(select(Coupon).order_by(Coupon.id.desc()).limit(100)).scalars().all()
+    return templates.TemplateResponse(request, "ops/coupons.html",
+                                      {"coupons": coupons, "generated": generated})
+
+
+@router.post("/coupons/{coupon_id}/toggle")
+def ops_coupon_toggle(coupon_id: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    from app.models import Coupon
+    c = db.get(Coupon, coupon_id)
+    if c is not None:
+        c.active = not c.active
+        db.commit()
+    return RedirectResponse("/admin-ops/coupons", status_code=303)

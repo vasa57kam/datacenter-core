@@ -33,6 +33,7 @@ class Wallet(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="RUB")
     balance_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    promise_limit_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     user = relationship("User")
     __table_args__ = (CheckConstraint("balance_minor >= 0", name="wallets_balance_non_negative"),)
@@ -258,3 +259,30 @@ class TicketMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
 
     ticket: Mapped["SupportTicket"] = relationship(back_populates="messages")
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, default="promo")  # promo | gift | coupon
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_activations: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    activations_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+
+
+class CouponActivation(Base):
+    __tablename__ = "coupon_activations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    coupon_id: Mapped[int] = mapped_column(ForeignKey("coupons.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+
+    __table_args__ = (UniqueConstraint("coupon_id", "user_id", name="uq_coupon_user"),)
