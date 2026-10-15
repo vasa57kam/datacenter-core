@@ -1,0 +1,23 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Тикет {{ ticket.id }}{% endblock %}
+{% block content %}
+<div class="card">
+<h1>Тикет №{{ ticket.id }}: {{ ticket.subject }}</h1>
+<p class="note">Клиент: user_id={{ ticket.user_id }} · статус: {{ ticket.status }}</p>
+{% for m in ticket.messages %}
+<div style="margin:12px 0;padding:12px;border-radius:8px;background:{{ '#0d1117' if m.author_role == 'client' else '#0f2d1a' }}">
+  <div class="note">{{ 'КЛИЕНТ' if m.author_role == 'client' else 'МЕНЕДЖЕР' }} · {{ m.created_at.strftime('%d.%m %H:%M') }}</div>
+  <div style="white-space:pre-wrap;margin-top:6px">{{ m.body }}</div>
+</div>
+{% endfor %}
+<form method="post" action="/admin-ops/tickets/{{ ticket.id }}/reply">
+  <label>Ответ клиента</label>
+  <textarea name="body" style="min-height:80px"></textarea>
+  <p><button class="btn" type="submit">Ответить</button></p>
+</form>
+<form method="post" action="/admin-ops/tickets/{{ ticket.id }}/close" style="margin-top:8px">
+  <button class="btn sec" type="submit">Закрыть тикет</button>
+</form>
+<p style="margin-top:16px"><a href="/admin-ops/tickets">← Все тикеты</a></p>
+</div>
+{% endblock %}

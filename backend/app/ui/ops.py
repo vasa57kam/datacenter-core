@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.db import get_db
-from app.models import User
+from app.models import SupportTicket, TicketMessage, User
 from app.services.node_import import import_node_from_inbound
 from app.services.tariffs import UNITS, ensure_tariffs
 
@@ -168,3 +168,48 @@ def passwords_set(
     user.password_hash = security.hash_password(new)
     db.commit()
     return RedirectResponse(f"/admin-ops/passwords?ok=Пароль+{user.email}+изменён", status_code=303)
+
+
+@router.get("/tickets", response_class=HTMLResponse)
+def ops_tickets(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    tickets = db.execute(select(SupportTicket).order_by(SupportTicket.id.desc())).scalars().all()
+    return templates.TemplateResponse(request, "ops/tickets.html", {"tickets": tickets})
+
+
+@router.get("/tickets/{ticket_id}", response_class=HTMLResponse)
+def ops_ticket_view(ticket_id: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is None:
+        return RedirectResponse("/admin-ops/tickets", status_code=303)
+    return templates.TemplateResponse(request, "ops/ticket_view.html", {"ticket": ticket})
+
+
+@router.post("/tickets/{ticket_id}/reply")
+def ops_ticket_reply(ticket_id: int, request: Request, body: str = Form(), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is not None and body.strip():
+        db.add(TicketMessage(ticket_id=ticket.id, author_role="manager", body=body.strip()))
+        ticket.status = "answered"
+        db.commit()
+    return RedirectResponse(f"/admin-ops/tickets/{ticket_id}", status_code=303)
+
+
+@router.post("/tickets/{ticket_id}/close")
+def ops_ticket_close(ticket_id: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r:
+        return r
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is not None:
+        ticket.status = "closed"
+        db.commit()
+    return RedirectResponse(f"/admin-ops/tickets/{ticket_id}", status_code=303)

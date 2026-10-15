@@ -1,3 +1,4 @@
+from app.core.tz import now as tz_now
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -16,7 +17,7 @@ TRAFFIC_BYTES = {"gb": 1024 ** 3, "mb": 1024 ** 2}
 PREPAID_UNITS = {"month", "one_time"}
 
 
-def utcnow() -> datetime:
+def tz_now() -> datetime:
     return datetime.now(MSK)
 
 
@@ -38,7 +39,7 @@ def report_usage(db, node: VpnNode, item) -> UsageSession | None:
     if not item.active:
         if session is not None:
             session.status = "closed"
-            session.ended_at = utcnow()
+            session.ended_at = tz_now()
         db.flush()
         return session
 
@@ -48,13 +49,13 @@ def report_usage(db, node: VpnNode, item) -> UsageSession | None:
             vpn_account_id=account.id,
             node_id=node.id,
             external_session_id=item.external_session_id,
-            started_at=utcnow(),
-            last_heartbeat_at=utcnow(),
+            started_at=tz_now(),
+            last_heartbeat_at=tz_now(),
             status="active",
         )
         db.add(session)
     else:
-        session.last_heartbeat_at = utcnow()
+        session.last_heartbeat_at = tz_now()
         if item.external_session_id and not session.external_session_id:
             session.external_session_id = item.external_session_id
 
@@ -72,7 +73,7 @@ def _suspend(db, service: ServiceInstance, session: UsageSession) -> None:
         service.status = "suspended"
         enqueue_task(db, "service_instance", service.id, "suspend")
     session.status = "closed"
-    session.ended_at = utcnow()
+    session.ended_at = tz_now()
     db.commit()
 
 
@@ -88,7 +89,7 @@ def charge_active_sessions() -> None:
             service = db.get(ServiceInstance, session.service_instance_id)
             if service is None or service.status != "active":
                 session.status = "closed"
-                session.ended_at = utcnow()
+                session.ended_at = tz_now()
                 db.commit()
                 continue
             product = db.get(Product, service.product_id)
@@ -128,7 +129,7 @@ def charge_active_sessions() -> None:
                 continue
             tick = TICK_SECONDS[product.unit]
             wallet = ledger.get_wallet(db, service.user_id)
-            elapsed = int((utcnow() - session.started_at).total_seconds())
+            elapsed = int((tz_now() - session.started_at).total_seconds())
             ticks = elapsed // tick
             charged = 0
             for n in range(session.charged_minutes + 1, ticks + 1):
@@ -155,7 +156,7 @@ def charge_active_sessions() -> None:
 
 
 def close_stale_sessions() -> None:
-    cutoff = utcnow() - timedelta(seconds=settings.heartbeat_grace_seconds)
+    cutoff = tz_now() - timedelta(seconds=settings.heartbeat_grace_seconds)
     db = SessionLocal()
     try:
         stale = db.execute(

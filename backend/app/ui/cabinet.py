@@ -12,7 +12,8 @@ from app.adapters.vpn import get_adapter
 from app.core import security
 from app.db import get_db
 from app.models import (
-    LedgerEntry, PaymentRequest, Product, ServiceInstance, User, VpnAccount, VpnNode,
+    LedgerEntry, PaymentRequest, Product, ServiceInstance, SupportTicket,
+    TicketMessage, User, VpnAccount, VpnNode,
 )
 from app.services import ledger
 from app.services.provisioning import enqueue_task
@@ -29,6 +30,31 @@ RU_STATUS = {
     "pending": "ожидает", "terminated": "завершена", "closed": "закрыта",
 }
 RU_PAYREQ = {"pending": "на проверке", "approved": "зачислено", "rejected": "отклонено"}
+REASON_RU = {
+    "vpn_usage_second": "Плата за использование (посекундно)",
+    "vpn_usage_minute": "Плата за использование (поминутно)",
+    "vpn_traffic_gb": "Плата за трафик (ГиБ)",
+    "payment_cash": "Пополнение: наличные",
+    "payment_transfer": "Пополнение: перевод на карту",
+    "payment_other": "Пополнение: другое",
+    "service_activation_month": "Активация месячного тарифа",
+    "service_activation_one_time": "Разовая оплата услуги",
+}
+
+
+def _ru_reason(r: str) -> str:
+    if r in REASON_RU:
+        return REASON_RU[r]
+    if r.startswith("vpn_usage_"):
+        return "Плата за использование"
+    if r.startswith("payment_"):
+        return "Пополнение баланса"
+    if r.startswith("service_activation"):
+        return "Активация тарифа"
+    return r
+
+
+templates.env.filters["ru_reason"] = _ru_reason
 templates.env.filters["ru_status"] = lambda s: RU_STATUS.get(s, s)
 templates.env.filters["ru_payreq"] = lambda s: RU_PAYREQ.get(s, s)
 
@@ -405,3 +431,63 @@ def service_resume(service_id: int, request: Request, db: Session = Depends(get_
     enqueue_task(db, "service_instance", service.id, "resume")
     db.commit()
     return RedirectResponse("/lk/", status_code=303)
+
+
+# ================= Тикеты поддержки =================
+
+@router.get("/tickets", response_class=HTMLResponse)
+def tickets_list(request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    tickets = db.execute(
+        select(SupportTicket).where(SupportTicket.user_id == user.id)
+        .order_by(SupportTicket.id.desc())
+    ).scalars().all()
+    return templates.TemplateResponse(request, "lk/tickets.html", {"user": user, "tickets": tickets})
+
+
+@router.get("/tickets/new", response_class=HTMLResponse)
+def ticket_new_page(request: Request):
+    user = _current_user(db=request and None or None, request=request) if False else None
+    return templates.TemplateResponse(request, "lk/ticket_new.html", {"error": None})
+
+
+@router.post("/tickets/new")
+def ticket_new(request: Request, subject: str = Form(), body: str = Form(), db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    ticket = SupportTicket(user_id=user.id, subject=subject.strip()[:200] or "Обращение", status="open")
+    db.add(ticket)
+    db.flush()
+    db.add(TicketMessage(ticket_id=ticket.id, author_role="client", body=body.strip()))
+    db.commit()
+    return RedirectResponse(f"/lk/tickets/{ticket.id}", status_code=303)
+
+
+@router.get("/tickets/{ticket_id}", response_class=HTMLResponse)
+def ticket_view(ticket_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is None or ticket.user_id != user.id:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse(request, "lk/ticket_view.html", {"user": user, "ticket": ticket})
+
+
+@router.post("/tickets/{ticket_id}/reply")
+def ticket_reply(ticket_id: int, request: Request, body: str = Form(), db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is None or ticket.user_id != user.id:
+        raise HTTPException(status_code=404)
+    if ticket.status != "closed":
+        db.add(TicketMessage(ticket_id=ticket.id, author_role="client", body=body.strip()))
+        ticket.status = "open"
+        ticket.updated_at = tz_now()
+        db.commit()
+    return RedirectResponse(f"/lk/tickets/{ticket.id}", status_code=303)

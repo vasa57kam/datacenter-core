@@ -1,0 +1,22 @@
+{% extends "lk/base.html" %}
+{% block title %}Обращение {{ ticket.id }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h3>Обращение №{{ ticket.id }}: {{ ticket.subject }}</h3>
+  <p class="note">Статус: {% if ticket.status == 'open' %}открыто{% elif ticket.status == 'answered' %}ответили{% else %}закрыто{% endif %}</p>
+  {% for m in ticket.messages %}
+  <div style="margin:12px 0;padding:12px;border-radius:8px;background:{{ '#161b22' if m.author_role == 'client' else '#0f2d1a' }}">
+    <div class="note">{{ 'Вы' if m.author_role == 'client' else 'Поддержка' }} · {{ m.created_at.strftime('%d.%m %H:%M') }}</div>
+    <div style="white-space:pre-wrap;margin-top:6px">{{ m.body }}</div>
+  </div>
+  {% endfor %}
+  {% if ticket.status != 'closed' %}
+  <form method="post" action="/lk/tickets/{{ ticket.id }}/reply">
+    <label>Ваш ответ</label>
+    <textarea name="body" required style="min-height:80px"></textarea>
+    <p style="margin-top:12px"><button type="submit">Ответить</button></p>
+  </form>
+  {% endif %}
+  <p><a href="/lk/tickets" class="btn secondary">← Все обращения</a></p>
+</div>
+{% endblock %}

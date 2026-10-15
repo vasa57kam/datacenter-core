@@ -1,0 +1,14 @@
+{% extends "lk/base.html" %}
+{% block title %}Новое обращение{% endblock %}
+{% block content %}
+<div class="card">
+  <h3>Новое обращение в поддержку</h3>
+  <form method="post" action="/lk/tickets/new">
+    <label>Тема</label>
+    <input name="subject" required placeholder="Например: не подключается услуга">
+    <label>Описание</label>
+    <textarea name="body" required style="min-height:120px" placeholder="Опишите проблему: что делали, что произошло, когда."></textarea>
+    <p style="margin-top:16px"><button type="submit">Отправить</button> <a href="/lk/tickets" class="btn secondary">Отмена</a></p>
+  </form>
+</div>
+{% endblock %}

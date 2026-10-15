@@ -61,9 +61,9 @@
 <div class="card">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <h3>Мои услуги</h3>
-    <a href="/lk/order" class="btn">+ Подключить услугу</a>
+    <a href="/lk/order" class="btn">+ Подключить услугу</a> <a href="/lk/tickets" class="btn secondary">Поддержка</a>
   </div>
-  <p class="note">Оплата списывается только за минуты/секунды фактического подключения. Пауза и отказ останавливают списания.</p>
+  <p class="note">Оплата списывается только за время фактического использования защищённого канала. Пауза и отказ останавливают списания. Вопросы — в «Поддержке».</p>
   {% if services %}
   <table>
     <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
@@ -111,7 +111,7 @@
       <td>{{ 'Пополнение' if e.entry_type == 'credit' else 'Списание' }}</td>
       <td style="color:{{ '#3fb950' if e.amount_minor > 0 else '#f85149' }}">{{ (e.amount_minor / 100) | round(2) }} ₽</td>
       <td>{{ (e.balance_after_minor / 100) | round(2) }} ₽</td>
-      <td>{{ e.reason }}</td>
+      <td>{{ e.reason | ru_reason }}</td>
     </tr>
     {% endfor %}
   </table>

@@ -17,7 +17,7 @@ def ensure_tariffs(db, protocol: str, country: str, prices: dict | None = None) 
     for unit, label, default_price in UNITS:
         price = int(prices.get(unit, default_price))
         code = f"vpn-{protocol}-{unit}"
-        name = f"{protocol.upper()} Reality ({country}), {label}"
+        name = f"Защищённый канал {country}, {label}"
         product = db.execute(
             select(Product).where(Product.code == code)
         ).scalar_one_or_none()

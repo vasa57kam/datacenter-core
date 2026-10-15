@@ -1,3 +1,4 @@
+from app.core.tz import now as tz_now
 from datetime import datetime
 
 from sqlalchemy import (
@@ -230,3 +231,30 @@ class PaymentRequest(Base):
         CheckConstraint("amount_minor > 0", name="payreq_amount_ck"),
         Index("ix_payreq_user", "user_id"),
     )
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now(), onupdate=lambda: tz_now())
+
+    messages: Mapped[list["TicketMessage"]] = relationship(
+        back_populates="ticket", cascade="all, delete-orphan",
+        order_by="TicketMessage.id",
+    )
+
+
+class TicketMessage(Base):
+    __tablename__ = "ticket_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True)
+    author_role: Mapped[str] = mapped_column(Text, nullable=False)  # client | manager
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+
+    ticket: Mapped["SupportTicket"] = relationship(back_populates="messages")

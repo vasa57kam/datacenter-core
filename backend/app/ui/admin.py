@@ -1,3 +1,4 @@
+from app.core.tz import now as tz_now
 import asyncio
 from datetime import datetime, timezone
 
@@ -359,7 +360,7 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
                         pr.status = "approved"
                     else:
                         pr.status = "rejected"
-                    pr.processed_at = datetime.now(timezone.utc)
+                    pr.processed_at = tz_now()
                 db.commit()
             except Exception:
                 log.exception("payment action failed")

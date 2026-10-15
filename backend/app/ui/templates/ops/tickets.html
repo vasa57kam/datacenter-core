@@ -1,0 +1,21 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Тикеты{% endblock %}
+{% block content %}
+<div class="card">
+<h1>🎫 Обращения клиентов</h1>
+{% if tickets %}
+<table>
+<tr><th>№</th><th>Клиент</th><th>Тема</th><th>Статус</th><th>Обновлено</th></tr>
+{% for t in tickets %}
+<tr>
+  <td><a href="/admin-ops/tickets/{{ t.id }}">{{ t.id }}</a></td>
+  <td>{{ t.user_id }}</td>
+  <td>{{ t.subject }}</td>
+  <td>{{ t.status }}</td>
+  <td>{{ t.updated_at.strftime('%d.%m %H:%M') }}</td>
+</tr>
+{% endfor %}
+</table>
+{% else %}<p class="note">Обращений нет.</p>{% endif %}
+</div>
+{% endblock %}
