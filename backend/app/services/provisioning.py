@@ -137,7 +137,16 @@ def _execute_delete(db: Session, service: ServiceInstance) -> dict:
         node = db.get(VpnNode, account.node_id)
         if node:
             try:
-                asyncio.run(get_adapter(node).delete_account(db, account))
+                import asyncio
+                import concurrent.futures
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Мы внутри event loop (FastAPI request handler) - запускаем в отдельном потоке
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(asyncio.run, get_adapter(node).delete_account(db, account))
+                        future.result(timeout=10)
+                else:
+                    loop.run_until_complete(get_adapter(node).delete_account(db, account))
             except Exception as e:
                 log.warning("panel delete failed: %s", e)
     db.delete(service)

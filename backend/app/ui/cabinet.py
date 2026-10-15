@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adapters.vpn import get_adapter
+from app.core.tz import now as tz_now
 from app.core import security
 from app.db import get_db
 from app.models import (
@@ -449,7 +450,6 @@ def tickets_list(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/tickets/new", response_class=HTMLResponse)
 def ticket_new_page(request: Request):
-    user = _current_user(db=request and None or None, request=request) if False else None
     return templates.TemplateResponse(request, "lk/ticket_new.html", {"error": None})
 
 
