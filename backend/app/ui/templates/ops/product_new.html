@@ -1,0 +1,18 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Новый тариф{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+<h1>Новый тариф</h1>
+<form method="post">
+  <label>Код (латиницей)</label><input name="code" placeholder="vpn-mynew-minute" required>
+  <label>Название (видят клиенты)</label><input name="name" placeholder="Защищённый канал (NL), поминутно" required>
+  <label>Тип услуги</label>
+  <select name="service_type"><option value="vpn">Защищённый канал</option><option value="cctv">Видеонаблюдение</option><option value="vps">Сервер</option></select>
+  <label>Единица</label>
+  <select name="unit"><option value="minute">₽ / минута</option><option value="second">₽ / секунда</option><option value="gb">₽ / ГиБ</option><option value="month">₽ / месяц</option><option value="one_time">разово</option></select>
+  <label>Цена, ₽</label><input name="price_rub" value="1.00">
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="active" style="width:auto" checked> Показывать клиентам</label>
+  <button class="btn" type="submit">Создать</button> <a class="btn sec" href="/admin-ops/products">Отмена</a>
+</form>
+</div>
+{% endblock %}

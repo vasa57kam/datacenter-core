@@ -3,6 +3,7 @@
 {% block content %}
 <div class="card">
 <h1>{{ title }}</h1>
+{% if extra %}{{ extra | safe }}{% endif %}
 {% if note %}<p class="note">{{ note }}</p>{% endif %}
 <table>
 <tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}<th>Действия</th></tr>

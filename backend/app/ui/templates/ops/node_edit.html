@@ -1,0 +1,16 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Нода{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+<h1>Нода: {{ n.name }}</h1>
+<form method="post">
+  <label>Название</label><input name="name" value="{{ n.name }}">
+  <label>Код</label><input name="code" value="{{ n.code }}">
+  <label>Страна</label><input name="country" value="{{ n.country or '' }}">
+  <label>Протокол</label>
+  <select name="protocol">{% for pr in ['vless','wireguard','openvpn','shadowsocks'] %}<option value="{{ pr }}" {% if n.protocol == pr %}selected{% endif %}>{{ pr }}</option>{% endfor %}</select>
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="active" style="width:auto" {% if n.active %}checked{% endif %}> Нода активна</label>
+  <button class="btn" type="submit">Сохранить</button> <a class="btn sec" href="/admin-ops/nodes">Отмена</a>
+</form>
+</div>
+{% endblock %}

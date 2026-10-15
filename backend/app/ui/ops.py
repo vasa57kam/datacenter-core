@@ -316,9 +316,11 @@ def ops_users(request: Request, db: Session = Depends(get_db)):
             acts.append({"label": "Заблокировать" if u.status == "active" else "Разблокировать",
                          "url": f"/admin-ops/users/{u.id}/toggle", "method": "POST",
                          "cls": "warn" if u.status == "active" else ""})
+        acts.append({"label": "Изменить", "url": f"/admin-ops/users/{u.id}", "method": "GET"})
         rows.append({"cells": [u.id, u.email, u.role, u.status, _dt(u.created_at)], "actions": acts})
     return templates.TemplateResponse(request, "ops/table.html", {
-        "title": "Пользователи", "columns": ["№", "Email", "Роль", "Статус", "Создан"], "rows": rows})
+        "title": "Пользователи", "columns": ["№", "Email", "Роль", "Статус", "Создан"], "rows": rows,
+        "extra": '<p><a class="btn" href="/admin-ops/users/new">+ Создать пользователя</a></p>'})
 
 
 @router.post("/users/{uid}/toggle")
@@ -389,7 +391,8 @@ def ops_products(request: Request, db: Session = Depends(get_db)):
                  {"label": "Выключить" if p.active else "Включить", "url": f"/admin-ops/products/{p.id}/toggle", "method": "POST", "cls": "sec"},
              ]} for p in products]
     return templates.TemplateResponse(request, "ops/table.html", {
-        "title": "Тарифы", "columns": ["№", "Название", "Единица", "Цена", "Виден"], "rows": rows})
+        "title": "Тарифы", "columns": ["№", "Название", "Единица", "Цена", "Виден"], "rows": rows,
+        "extra": '<p><a class="btn" href="/admin-ops/products/new">+ Создать тариф</a></p>'})
 
 
 @router.get("/products/{pid}", response_class=HTMLResponse)
@@ -488,7 +491,10 @@ def ops_nodes(request: Request, db: Session = Depends(get_db)):
     if r: return r
     nodes = db.execute(select(_Node).order_by(_Node.id)).scalars().all()
     rows = [{"cells": [n.id, n.name, n.code, n.country, n.protocol, "да" if n.active else "нет"],
-             "actions": [{"label": "Выключить" if n.active else "Включить", "url": f"/admin-ops/nodes/{n.id}/toggle", "method": "POST", "cls": "sec"}]}
+             "actions": [
+                 {"label": "Изменить", "url": f"/admin-ops/nodes/{n.id}", "method": "GET"},
+                 {"label": "Выключить" if n.active else "Включить", "url": f"/admin-ops/nodes/{n.id}/toggle", "method": "POST", "cls": "sec"},
+             ]}
             for n in nodes]
     return templates.TemplateResponse(request, "ops/table.html", {
         "title": "Ноды", "columns": ["№", "Название", "Код", "Страна", "Протокол", "Активна"], "rows": rows})
@@ -510,8 +516,14 @@ def ops_accounts(request: Request, db: Session = Depends(get_db)):
     r = _guard(request)
     if r: return r
     accounts = db.execute(select(_Account).order_by(_Account.id.desc())).scalars().all()
-    rows = [{"cells": [a.id, a.service_instance_id, a.username, a.status, _dt(a.created_at)], "actions": []}
-            for a in accounts]
+    rows = []
+    for a in accounts:
+        acts = []
+        if a.status == "active":
+            acts.append({"label": "Отключить", "url": f"/admin-ops/accounts/{a.id}/suspend", "method": "POST", "cls": "warn", "confirm": "Отключить аккаунт клиента?"})
+        elif a.status == "suspended":
+            acts.append({"label": "Включить", "url": f"/admin-ops/accounts/{a.id}/enable", "method": "POST"})
+        rows.append({"cells": [a.id, a.service_instance_id, a.username, a.status, _dt(a.created_at)], "actions": acts})
     return templates.TemplateResponse(request, "ops/table.html", {
         "title": "Аккаунты клиентов", "columns": ["№", "Услуга", "Логин клиента", "Статус", "Создан"], "rows": rows})
 
@@ -521,8 +533,12 @@ def ops_sessions(request: Request, db: Session = Depends(get_db)):
     r = _guard(request)
     if r: return r
     sessions = db.execute(select(_Session).order_by(_Session.id.desc()).limit(300)).scalars().all()
-    rows = [{"cells": [x.id, x.service_instance_id, x.status, _dt(x.started_at), _dt(x.ended_at), _rub(x.cost_minor)], "actions": []}
-            for x in sessions]
+    rows = []
+    for x in sessions:
+        acts = []
+        if x.status == "active":
+            acts.append({"label": "Закрыть", "url": f"/admin-ops/sessions/{x.id}/close", "method": "POST", "cls": "warn"})
+        rows.append({"cells": [x.id, x.service_instance_id, x.status, _dt(x.started_at), _dt(x.ended_at), _rub(x.cost_minor)], "actions": acts})
     return templates.TemplateResponse(request, "ops/table.html", {
         "title": "Сессии использования", "columns": ["№", "Услуга", "Статус", "Начало", "Конец", "Стоимость"], "rows": rows})
 
@@ -595,3 +611,187 @@ def ops_payreq_reject(pid: int, request: Request, db: Session = Depends(get_db))
         pr.status = "rejected"
         db.commit()
     return RedirectResponse("/admin-ops/payreqs", status_code=303)
+
+
+# ================= Управление: создание и редактирование =================
+from app.core import security as _security
+
+
+@router.get("/users/new", response_class=HTMLResponse)
+def ops_user_new_page(request: Request):
+    r = _guard(request)
+    if r: return r
+    return templates.TemplateResponse(request, "ops/user_edit.html", {"u": None})
+
+
+@router.post("/users/new")
+def ops_user_create(request: Request, email: str = Form(), role: str = Form("client"),
+                    status: str = Form("active"), new_password: str = Form(""), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    email = (email or "").strip().lower()
+    if "@" not in email or len(new_password) < 8:
+        return RedirectResponse("/admin-ops/users/new", status_code=303)
+    exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if exists is None:
+        db.add(User(email=email, role=role if role in ("client", "admin") else "client",
+                    status=status if status in ("active", "blocked") else "active",
+                    password_hash=_security.hash_password(new_password)))
+        db.commit()
+    return RedirectResponse("/admin-ops/users", status_code=303)
+
+
+@router.get("/users/{uid}", response_class=HTMLResponse)
+def ops_user_edit(uid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    u = db.get(User, uid)
+    if u is None: return RedirectResponse("/admin-ops/users", status_code=303)
+    return templates.TemplateResponse(request, "ops/user_edit.html", {"u": u})
+
+
+@router.post("/users/{uid}")
+def ops_user_save(uid: int, request: Request, email: str = Form(), role: str = Form(),
+                  status: str = Form(), new_password: str = Form(""), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    u = db.get(User, uid)
+    if u is not None:
+        u.email = (email or u.email).strip().lower()
+        u.role = role if role in ("client", "admin") else u.role
+        u.status = status if status in ("active", "blocked") else u.status
+        if new_password and len(new_password) >= 8:
+            u.password_hash = _security.hash_password(new_password)
+        db.commit()
+    return RedirectResponse("/admin-ops/users", status_code=303)
+
+
+@router.get("/nodes/{nid}", response_class=HTMLResponse)
+def ops_node_edit(nid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    n = db.get(_Node, nid)
+    if n is None: return RedirectResponse("/admin-ops/nodes", status_code=303)
+    return templates.TemplateResponse(request, "ops/node_edit.html", {"n": n})
+
+
+@router.post("/nodes/{nid}")
+def ops_node_save(nid: int, request: Request, name: str = Form(), code: str = Form(),
+                  country: str = Form(""), protocol: str = Form(), active: str = Form(""), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    n = db.get(_Node, nid)
+    if n is not None:
+        n.name = name.strip() or n.name
+        n.code = code.strip() or n.code
+        n.country = country.strip() or n.country
+        n.protocol = protocol.strip() or n.protocol
+        n.active = bool(active)
+        db.commit()
+    return RedirectResponse("/admin-ops/nodes", status_code=303)
+
+
+@router.post("/accounts/{aid}/suspend")
+def ops_account_suspend(aid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    a = db.get(_Account, aid)
+    if a is not None and a.status == "active":
+        a.status = "suspended"
+        if a.service_instance_id:
+            _enqueue(db, "service_instance", a.service_instance_id, "suspend")
+        db.commit()
+    return RedirectResponse("/admin-ops/accounts", status_code=303)
+
+
+@router.post("/accounts/{aid}/enable")
+def ops_account_enable(aid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    a = db.get(_Account, aid)
+    if a is not None and a.status == "suspended":
+        a.status = "active"
+        if a.service_instance_id:
+            _enqueue(db, "service_instance", a.service_instance_id, "resume")
+        db.commit()
+    return RedirectResponse("/admin-ops/accounts", status_code=303)
+
+
+@router.post("/sessions/{sid}/close")
+def ops_session_close(sid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from app.core.tz import now as _now
+    x = db.get(_Session, sid)
+    if x is not None and x.status == "active":
+        x.status = "closed"
+        x.ended_at = _now()
+        db.commit()
+    return RedirectResponse("/admin-ops/sessions", status_code=303)
+
+
+@router.post("/coupons/create")
+def ops_coupon_create(request: Request, code: str = Form(), kind: str = Form("promo"),
+                      amount: str = Form(), max_act: int = Form(1), days: int = Form(0),
+                      note: str = Form(""), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from datetime import timedelta
+    from app.core.tz import now as _now
+    from app.models import Coupon as _Coupon
+    code = (code or "").strip().upper()
+    if not code:
+        return RedirectResponse("/admin-ops/coupons", status_code=303)
+    try: amount_minor = int(round(float(amount.replace(",", ".")) * 100))
+    except ValueError: amount_minor = 0
+    if amount_minor <= 0:
+        return RedirectResponse("/admin-ops/coupons", status_code=303)
+    exists = db.execute(select(_Coupon).where(_Coupon.code == code)).scalar_one_or_none()
+    if exists is None:
+        db.add(_Coupon(code=code, kind=kind if kind in ("promo", "gift", "coupon") else "promo",
+                       amount_minor=amount_minor, max_activations=max(1, max_act),
+                       expires_at=_now() + timedelta(days=days) if days and days > 0 else None,
+                       note=note.strip() or None))
+        db.commit()
+    return RedirectResponse("/admin-ops/coupons", status_code=303)
+
+
+@router.post("/coupons/{cid}/delete")
+def ops_coupon_delete(cid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from app.models import Coupon as _Coupon
+    c = db.get(_Coupon, cid)
+    if c is not None:
+        db.delete(c)
+        db.commit()
+    return RedirectResponse("/admin-ops/coupons", status_code=303)
+
+
+@router.get("/products/new", response_class=HTMLResponse)
+def ops_product_new_page(request: Request):
+    r = _guard(request)
+    if r: return r
+    return templates.TemplateResponse(request, "ops/product_new.html", {})
+
+
+@router.post("/products/new")
+def ops_product_create(request: Request, code: str = Form(), name: str = Form(),
+                       service_type: str = Form("vpn"), unit: str = Form("minute"),
+                       price_rub: str = Form(), active: str = Form(""), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    code = (code or "").strip()
+    if not code:
+        return RedirectResponse("/admin-ops/products/new", status_code=303)
+    try: price_minor = int(round(float(price_rub.replace(",", ".")) * 100))
+    except ValueError: price_minor = 0
+    exists = db.execute(select(_Product).where(_Product.code == code)).scalar_one_or_none()
+    if exists is None:
+        db.add(_Product(code=code, name=name.strip() or code,
+                        service_type=service_type if service_type in ("vpn", "cctv", "vps") else "vpn",
+                        unit=unit if unit in ("minute", "second", "gb", "month", "one_time") else "minute",
+                        price_minor=price_minor, active=bool(active),
+                        config={"protocol": "vless"} if service_type == "vpn" else {}))
+        db.commit()
+    return RedirectResponse("/admin-ops/products", status_code=303)
