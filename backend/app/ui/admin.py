@@ -4,7 +4,9 @@ from sqladmin import Admin, ModelView, action
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import select
 from starlette.requests import Request
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import Response as StarletteResponse
 from starlette.responses import RedirectResponse
 
 from app.core import security
@@ -137,23 +139,36 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
     def _redirect_list(self, request: Request):
         return RedirectResponse(f"{request.base_url}admin/payment-request/list", status_code=302)
 
+    @staticmethod
+    def _pk_list(request: Request, pks) -> list:
+        if pks is None:
+            raw = request.query_params.get("pks", "")
+        elif isinstance(pks, (list, tuple)):
+            raw = ",".join(str(x) for x in pks)
+        else:
+            raw = str(pks)
+        return [int(x) for x in raw.split(",") if x.strip().isdigit()]
+
     @action(name="approve", label="Одобрить и зачислить",
             confirmation_message="Зачислить сумму на кошелёк клиента?")
-    async def approve(self, request: Request, pk):
+    async def approve(self, request: Request, pks=None):
+        ids = self._pk_list(request, pks)
+
         def _sync():
             db = SessionLocal()
             try:
-                pr = db.get(PaymentRequest, int(pk))
-                if pr is not None and pr.status == "pending":
-                    wallet = ledger.get_wallet(db, pr.user_id)
-                    ledger.credit(
-                        db, wallet, pr.amount_minor,
-                        reason=f"payment_{pr.method}",
-                        entity_type="payment_request", entity_id=pr.id,
-                        idempotency_key=f"payreq:{pr.id}",
-                    )
-                    pr.status = "approved"
-                    db.commit()
+                for pid in ids:
+                    pr = db.get(PaymentRequest, pid)
+                    if pr is not None and pr.status == "pending":
+                        wallet = ledger.get_wallet(db, pr.user_id)
+                        ledger.credit(
+                            db, wallet, pr.amount_minor,
+                            reason=f"payment_{pr.method}",
+                            entity_type="payment_request", entity_id=pr.id,
+                            idempotency_key=f"payreq:{pr.id}",
+                        )
+                        pr.status = "approved"
+                db.commit()
             finally:
                 db.close()
         await asyncio.to_thread(_sync)
@@ -161,21 +176,59 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
 
     @action(name="reject", label="Отклонить",
             confirmation_message="Отклонить заявку без зачисления?")
-    async def reject(self, request: Request, pk):
+    async def reject(self, request: Request, pks=None):
+        ids = self._pk_list(request, pks)
+
         def _sync():
             db = SessionLocal()
             try:
-                pr = db.get(PaymentRequest, int(pk))
-                if pr is not None and pr.status == "pending":
-                    pr.status = "rejected"
-                    db.commit()
+                for pid in ids:
+                    pr = db.get(PaymentRequest, pid)
+                    if pr is not None and pr.status == "pending":
+                        pr.status = "rejected"
+                db.commit()
             finally:
                 db.close()
         await asyncio.to_thread(_sync)
         return self._redirect_list(request)
 
 
+_QUICK_LINKS_HTML = """<div id="admin-quicklinks" style="position:fixed;bottom:0;left:0;right:0;background:#0d1117;border-top:2px solid #238636;padding:8px 16px;z-index:9999;font-family:sans-serif;font-size:14px">
+<a href="/admin-ops/" style="color:#3fb950;font-weight:700;margin-right:14px;text-decoration:none">⚡ Быстрые операции</a>
+<a href="/admin-ops/nodes/import" style="color:#58a6ff;margin-right:14px;text-decoration:none">Импорт ноды</a>
+<a href="/admin-ops/tariffs" style="color:#58a6ff;margin-right:14px;text-decoration:none">Тарифы</a>
+<a href="/admin-ops/tickets" style="color:#58a6ff;margin-right:14px;text-decoration:none">Тикеты</a>
+<a href="/admin-ops/passwords" style="color:#58a6ff;margin-right:14px;text-decoration:none">Пароли</a>
+<a href="/admin-help" style="color:#58a6ff;text-decoration:none">📚 База знаний</a>
+</div>"""
+
+
+class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if not (path == "/admin" or path.startswith("/admin/")):
+            return response
+        if path.startswith("/admin-ops") or path.startswith("/admin-help"):
+            return response
+        ctype = response.headers.get("content-type", "")
+        if "text/html" not in ctype:
+            return response
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk if isinstance(chunk, bytes) else chunk.encode())
+        html = b"".join(chunks).decode("utf-8", errors="ignore")
+        media = ctype.split(";")[0]
+        if "</body>" in html and "admin-quicklinks" not in html:
+            html = html.replace("</body>", _QUICK_LINKS_HTML + "\n</body>")
+        headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+        return StarletteResponse(content=html, status_code=response.status_code,
+                                 headers=headers, media_type=media)
+
+
 def setup_admin(app, secret_key: str = ""):
+    if not any(getattr(m, "cls", None) is AdminQuickLinksMiddleware for m in app.user_middleware):
+        app.add_middleware(AdminQuickLinksMiddleware)
     if not any(getattr(m, "cls", None) is SessionMiddleware for m in app.user_middleware):
         app.add_middleware(SessionMiddleware, secret_key=secret_key or "itkam34-billing-sessions")
     admin = Admin(
