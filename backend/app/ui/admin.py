@@ -103,7 +103,7 @@ class AccountAdmin(ModelView, model=VpnAccount):
 class UsageAdmin(ModelView, model=UsageSession):
     column_list = [UsageSession.id, UsageSession.service_instance_id,
                    UsageSession.vpn_account_id, UsageSession.status,
-                   UsageSession.started_at, UsageSession.closed_at, UsageSession.cost_minor]
+                   UsageSession.started_at, UsageSession.last_heartbeat_at, UsageSession.cost_minor]
     can_create = False
     can_edit = False
     can_delete = False
