@@ -1,33 +1,23 @@
 {% extends "lk/base.html" %}
-{% block title %}ITKAM34 — облачные услуги{% endblock %}
+{% block title %}Облачные услуги{% endblock %}
 {% block content %}
 <div class="card hero">
-  <h1>Облачные услуги с поминутной оплатой</h1>
-Защищённые каналы передачи данных и облачное видеонаблюдение: платите только за минуты фактического использования.
-  {% if user %}
-    <a href="/lk/" class="btn">В мой кабинет</a>
-  {% else %}
-    <a href="/lk/register" class="btn">Зарегистрироваться</a>
-    <a href="/lk/login" class="btn secondary">Войти в кабинет</a>
-  {% endif %}
+  <h1 style="font-size:34px;margin:0 0 10px">Облачные услуги с поминутной оплатой</h1>
+  <p style="font-size:16px;opacity:.92;max-width:660px">Защищённые каналы передачи данных и облачное видеонаблюдение: платите только за минуты фактического использования. Без абонентской платы и скрытых тарифов.</p>
+  <p>{% if user %}<a class="btn" style="background:#fff;color:#0f172a" href="/lk/order">Подключить услугу</a> <a class="btn" style="background:rgba(255,255,255,.2)" href="/lk/">В мой кабинет</a>
+  {% else %}<a class="btn" style="background:#fff;color:#0f172a" href="/lk/register">Создать кабинет</a> <a class="btn" style="background:rgba(255,255,255,.2)" href="/lk/login">Вход</a>{% endif %}</p>
 </div>
-
 <div class="card">
   <h3>Тарифы</h3>
-  {% if products %}
-  <table>
-    <tr><th>Услуга</th><th>Категория</th><th>Цена</th><th></th></tr>
-    {% for p in products %}
-    <tr>
-      <td>{{ p.name }}</td>
-      <td>{{ p.service_type | ru_type }}</td>
-      <td>{{ (p.price_minor / 100) | round(2) }} ₽ / {% if p.unit == 'second' %}сек{% elif p.unit == 'minute' %}мин{% elif p.unit == 'month' %}мес{% elif p.unit == 'hour' %}ч{% elif p.unit == 'day' %}день{% else %}раз{% endif %}</td>
-      <td><a href="/lk/order?product={{ p.code }}" class="btn">Подключить</a></td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}
-  <div class="empty-state">Каталог пополняется</div>
-  {% endif %}
+  <table><tr><th>Услуга</th><th>Категория</th><th>Цена</th><th></th></tr>
+  {% for p in products %}
+  <tr><td><b>{{ p.name }}</b></td><td>{{ p.service_type | ru_type }}</td>
+  <td>{{ (p.price_minor/100) | round(2) }} ₽ {% if p.unit=='minute' %}/ мин{% elif p.unit=='second' %}/ сек{% elif p.unit=='gb' %}/ ГиБ{% elif p.unit=='month' %}/ мес{% else %}разово{% endif %}</td>
+  <td><a class="btn" href="/lk/order?product={{ p.code }}">Подключить</a></td></tr>
+  {% endfor %}</table>
+</div>
+<div class="grid cols-2">
+  <div class="card"><h3>Честная оплата</h3><p class="muted">Пауза и отказ останавливают списания мгновенно. Округление — в вашу пользу.</p></div>
+  <div class="card"><h3>Поддержка без роботов</h3><p class="muted">Вопросы — через тикеты в кабинете: отвечаем быстро и по-человечески.</p></div>
 </div>
 {% endblock %}

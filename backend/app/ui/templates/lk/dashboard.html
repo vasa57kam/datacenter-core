@@ -1,136 +1,57 @@
 {% extends "lk/base.html" %}
 {% block title %}Кабинет{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="money-label">Баланс</div>
-  <div class="money">{{ (wallet.balance_minor / 100) | round(2) }} ₽</div>
-</div>
-
-<div class="card">
-  <h3>Пополнить баланс</h3>
-  <form method="post" action="/lk/topup">
-    <div class="form-row">
-      <div>
-        <label>Сумма, ₽</label>
-        <input name="amount" type="number" min="1" step="1" placeholder="100" required>
-      </div>
-      <div>
-        <label>Способ</label>
-        <select name="method">
-          {% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div>
-        <button type="submit">Создать заявку</button>
-      </div>
-    </div>
-    <p class="note" id="topup-note">{{ notes['transfer'] }}</p>
-    <label>Комментарий (необязательно)</label>
-    <input name="comment" placeholder="Email или детали платежа">
-  </form>
-  <script>
-    const notes = {{ notes | tojson }};
-    const sel = document.querySelector('select[name=method]');
-    const note = document.getElementById('topup-note');
-    sel.addEventListener('change', () => { note.textContent = notes[sel.value] || ''; });
-  </script>
-  {% if payreqs %}
-  <h3 style="margin-top:24px">Заявки на пополнение</h3>
-  <table>
-    <tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th><th></th></tr>
-    {% for p in payreqs %}
-    <tr>
-      <td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td>
-      <td>{{ (p.amount_minor / 100) | round(2) }} ₽</td>
-      <td>{{ p.method }}</td>
-      <td class="{% if p.status == 'approved' %}st-active{% elif p.status == 'rejected' %}st-suspended{% else %}st-pending{% endif %}">{{ p.status | ru_payreq }}</td>
-      <td>
-        {% if p.status == 'pending' %}
-        <form method="post" action="/lk/topup/{{ p.id }}/cancel" style="display:inline"
-              onsubmit="return confirm('Удалить заявку?')">
-          <button class="danger">Удалить</button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endif %}
-</div>
-
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h3>Мои услуги</h3>
-    <a href="/lk/order" class="btn">+ Подключить услугу</a> <a href="/lk/tickets" class="btn secondary">Поддержка</a>
+<div class="grid cols-2">
+  <div class="card"><h3>Баланс</h3>
+    <div class="balance">{{ (wallet.balance_minor / 100) | round(2) }} ₽</div>
+    <p class="muted">Списания идут только за время фактического использования.</p>
   </div>
-  <p class="note">Оплата списывается только за время фактического использования защищённого канала. Пауза и отказ останавливают списания. Вопросы — в «Поддержке».</p>
+  <div class="card"><h3>Пополнить баланс</h3>
+    <form method="post" action="/lk/topup">
+      <label>Сумма, ₽</label><input name="amount" value="100" inputmode="decimal">
+      <label>Способ</label>
+      <select name="method" onchange="document.getElementById('mnote').textContent=NOTES[this.value]||''">
+        {% for code,label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      </select>
+      <p class="muted" id="mnote">{{ notes['transfer'] }}</p>
+      <label>Комментарий (необязательно)</label><input name="comment" placeholder="Email или детали платежа">
+      <button class="btn" type="submit">Создать заявку</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <h3 style="margin:0">Мои услуги</h3>
+    <div><a class="btn" href="/lk/order">+ Подключить услугу</a><a class="btn secondary" href="/lk/tickets">Поддержка</a></div>
+  </div>
   {% if services %}
-  <table>
-    <tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
-    {% for s in services %}
-    <tr>
-      <td>{{ s.name }}</td>
-      <td class="st-{{ s.status }}" data-svc-status="{{ s.id }}">{{ s.status | ru_status }}</td>
-      <td>
-        <a href="/lk/services/{{ s.id }}/config" class="btn secondary">Конфиг</a>
-        {% if s.status == 'active' %}
-        <form method="post" action="/lk/services/{{ s.id }}/suspend" style="display:inline">
-          <button class="secondary">Пауза</button>
-        </form>
-        {% elif s.status == 'suspended' %}
-        <form method="post" action="/lk/services/{{ s.id }}/resume" style="display:inline">
-          <button>Возобновить</button>
-        </form>
-        {% endif %}
-        {% if s.status in ['active', 'suspended', 'pending', 'provisioning'] %}
-        <form method="post" action="/lk/services/{{ s.id }}/delete" style="display:inline"
-              onsubmit="return confirm('Отказаться от услуги? Аккаунт и конфиг будут удалены безвозвратно. Списанные средства не возвращаются.')">
-          <button class="danger">Отказаться</button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}
-  <div class="empty-state">
-    <p>Услуг пока нет</p>
-    <a href="/lk/order" class="btn" style="margin-top:16px">Подключить первую</a>
-  </div>
-  {% endif %}
+  <table><tr><th>Услуга</th><th>Состояние</th><th>Действия</th></tr>
+  {% for s in services %}
+  <tr><td><b>{{ s.name }}</b></td>
+  <td>{% if s.status=='active' %}<span class="pill ok">активна</span>{% elif s.status=='suspended' %}<span class="pill pause">пауза</span>{% elif s.status in ['provisioning','pending'] %}<span class="pill info">выдаётся</span>{% else %}<span class="pill bad">{{ s.status | ru_status }}</span>{% endif %}</td>
+  <td><a class="btn secondary" href="/lk/services/{{ s.id }}/config">Ключ</a>
+    {% if s.status=='active' %}<form style="display:inline" method="post" action="/lk/services/{{ s.id }}/suspend"><button class="btn warn" type="submit">Пауза</button></form>
+    {% elif s.status=='suspended' %}<form style="display:inline" method="post" action="/lk/services/{{ s.id }}/resume"><button class="btn" type="submit">Возобновить</button></form>{% endif %}
+    <form style="display:inline" method="post" action="/lk/services/{{ s.id }}/delete" onsubmit="return confirm('Отказаться от услуги? Удаление безвозвратно, средства не возвращаются.')"><button class="btn danger" type="submit">Отказаться</button></form>
+  </td></tr>
+  {% endfor %}</table>
+  {% else %}<p class="muted">Услуг пока нет — подключите первую кнопкой «+ Подключить услугу».</p>{% endif %}
 </div>
 
-<div class="card">
-  <h3>Последние операции</h3>
-  {% if entries %}
-  <table>
-    <tr><th>Когда</th><th>Операция</th><th>Сумма</th><th>Баланс после</th><th>Назначение</th></tr>
-    {% for e in entries %}
-    <tr>
-      <td>{{ e.created_at.strftime('%d.%m %H:%M') }}</td>
-      <td>{{ 'Пополнение' if e.entry_type == 'credit' else 'Списание' }}</td>
-      <td style="color:{{ '#3fb950' if e.amount_minor > 0 else '#f85149' }}">{{ (e.amount_minor / 100) | round(2) }} ₽</td>
-      <td>{{ (e.balance_after_minor / 100) | round(2) }} ₽</td>
-      <td>{{ e.reason | ru_reason }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}
-  <div class="empty-state">Операций пока нет</div>
-  {% endif %}
+<div class="card"><h3>Заявки на пополнение</h3>
+  {% if payreqs %}<table><tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th><th></th></tr>
+  {% for p in payreqs %}<tr><td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ (p.amount_minor/100) | round(2) }} ₽</td><td>{{ p.method }}</td>
+  <td>{% if p.status=='approved' %}<span class="pill ok">зачислено</span>{% elif p.status=='pending' %}<span class="pill info">на проверке</span>{% else %}<span class="pill bad">отклонено</span>{% endif %}</td>
+  <td>{% if p.status=='pending' %}<form method="post" action="/lk/topup/{{ p.id }}/cancel"><button class="btn secondary" type="submit">Отозвать</button></form>{% endif %}</td></tr>
+  {% endfor %}</table>{% else %}<p class="muted">Заявок пока нет.</p>{% endif %}
 </div>
-<script>
-  async function tick() {
-    try {
-      const r = await fetch('/lk/services/status.json');
-      if (!r.ok) return;
-      const list = await r.json();
-      for (const s of list) {
-        const el = document.querySelector('[data-svc-status="' + s.id + '"]');
-        if (el) { el.textContent = s.ru; el.className = 'st-' + s.status; }
-      }
-    } catch (e) {}
-  }
-  setInterval(tick, 7000); tick();
-</script>
+
+<div class="card"><h3>Последние операции</h3>
+  {% if entries %}<table><tr><th>Когда</th><th>Операция</th><th>Сумма</th></tr>
+  {% for e in entries %}<tr><td>{{ e.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ e.reason | ru_reason }}</td>
+  <td class="{{ 'neg' if e.amount_minor < 0 else 'pos' }}">{{ (e.amount_minor/100) | round(2) }} ₽</td></tr>
+  {% endfor %}</table>{% else %}<p class="muted">Операций пока нет.</p>{% endif %}
+</div>
+<script>const NOTES={ {% for k,v in notes.items() %}"{{ k }}":"{{ v | e }}",{% endfor %} };</script>
 {% endblock %}

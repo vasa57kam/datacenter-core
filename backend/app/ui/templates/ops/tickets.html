@@ -9,7 +9,7 @@
 {% for t in tickets %}
 <tr>
   <td><a href="/admin-ops/tickets/{{ t.id }}">{{ t.id }}</a></td>
-  <td>{{ t.user_id }}</td>
+  <td>{{ t.user.email if t.user else t.user_id }}</td>
   <td>{{ t.subject }}</td>
   <td>{{ t.status }}</td>
   <td>{{ t.updated_at.strftime('%d.%m %H:%M') }}</td>

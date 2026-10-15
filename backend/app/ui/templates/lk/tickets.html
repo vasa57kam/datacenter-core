@@ -2,24 +2,12 @@
 {% block title %}Поддержка{% endblock %}
 {% block content %}
 <div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h3>Обращения в поддержку</h3>
-    <a href="/lk/tickets/new" class="btn">+ Новое обращение</a>
-  </div>
-  {% if tickets %}
-  <table>
-    <tr><th>№</th><th>Тема</th><th>Статус</th><th>Обновлено</th></tr>
-    {% for t in tickets %}
-    <tr>
-      <td>{{ t.id }}</td>
-      <td><a href="/lk/tickets/{{ t.id }}">{{ t.subject }}</a></td>
-      <td>{% if t.status == 'open' %}открыто{% elif t.status == 'answered' %}ответили{% else %}закрыто{% endif %}</td>
-      <td>{{ t.updated_at.strftime('%d.%m %H:%M') }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}
-  <div class="empty-state">Обращений пока нет</div>
-  {% endif %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+<h3 style="margin:0">Обращения в поддержку</h3><a class="btn" href="/lk/tickets/new">+ Новое обращение</a></div>
+{% if tickets %}<table><tr><th>№</th><th>Тема</th><th>Статус</th><th>Обновлено</th></tr>
+{% for t in tickets %}<tr><td>{{ t.id }}</td><td><a href="/lk/tickets/{{ t.id }}">{{ t.subject }}</a></td>
+<td>{% if t.status=='open' %}<span class="pill info">открыто</span>{% elif t.status=='answered' %}<span class="pill ok">ответили</span>{% else %}<span class="pill pause">закрыто</span>{% endif %}</td>
+<td>{{ t.updated_at.strftime('%d.%m %H:%M') }}</td></tr>{% endfor %}</table>
+{% else %}<p class="muted">Обращений пока нет. Мы всегда на связи.</p>{% endif %}
 </div>
 {% endblock %}

@@ -1,31 +1,16 @@
 {% extends "lk/base.html" %}
-{% block title %}Подключение услуги{% endblock %}
+{% block title %}Подключение{% endblock %}
 {% block content %}
-<div class="card" style="max-width:600px">
-  <h3>Подключить услугу</h3>
-  <form method="post" action="/lk/order">
-    <label>Продукт</label>
-    <select name="product_id">
-      {% for p in products %}
-      <option value="{{ p.id }}" {% if p.code == pre %}selected{% endif %}>
-        {{ p.name }} — {{ (p.price_minor / 100) | round(2) }} ₽ / {% if p.unit == 'second' %}сек{% elif p.unit == 'minute' %}мин{% elif p.unit == 'month' %}мес{% elif p.unit == 'hour' %}ч{% elif p.unit == 'day' %}день{% else %}раз{% endif %}
-      </option>
-      {% endfor %}
-    </select>
-    
-    <label>Сервер (необязательно)</label>
-    <select name="node_id">
-      <option value="0">Выбрать автоматически</option>
-      {% for n in nodes %}
-      <option value="{{ n.id }}">{{ n.name }} ({{ n.country }}, {{ n.protocol }})</option>
-      {% endfor %}
-    </select>
-    
-    <label>Название услуги (необязательно)</label>
-    <input name="name" placeholder="Например: Мой VPN">
-    
-    <button type="submit" style="width:100%">Подключить</button>
-  </form>
-  <p class="note" style="margin-top:16px">Списание начинается с первой минуты/секунды фактического использования. Пауза и возобновление — в кабинете.</p>
+<div class="card"><h3>Подключить услугу</h3>
+<form method="post" action="/lk/order">
+  <label>Тариф</label>
+  <select name="product_id">{% for p in products %}<option value="{{ p.id }}" {% if pre == p.code %}selected{% endif %}>{{ p.name }} — {{ (p.price_minor/100)|round(2) }} ₽ {% if p.unit=='minute' %}/ мин{% elif p.unit=='second' %}/ сек{% elif p.unit=='gb' %}/ ГиБ{% elif p.unit=='month' %}/ мес{% else %}разово{% endif %}</option>{% endfor %}</select>
+  <label>Сервер (необязательно)</label>
+  <select name="node_id"><option value="0">Автовыбор (рекомендуем)</option>{% for n in nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}</select>
+  <label>Название услуги (необязательно)</label>
+  <input name="name" placeholder="Например: мой канал">
+  <button class="btn" type="submit">Подключить</button>
+</form>
+<p class="muted">Списание начинается с первой минуты/секунды фактического использования. Пауза и отказ — в кабинете.</p>
 </div>
 {% endblock %}

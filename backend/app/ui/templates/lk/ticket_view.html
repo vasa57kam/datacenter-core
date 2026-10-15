@@ -1,22 +1,19 @@
 {% extends "lk/base.html" %}
 {% block title %}Обращение {{ ticket.id }}{% endblock %}
 {% block content %}
-<div class="card">
-  <h3>Обращение №{{ ticket.id }}: {{ ticket.subject }}</h3>
-  <p class="note">Статус: {% if ticket.status == 'open' %}открыто{% elif ticket.status == 'answered' %}ответили{% else %}закрыто{% endif %}</p>
-  {% for m in ticket.messages %}
-  <div style="margin:12px 0;padding:12px;border-radius:8px;background:{{ '#161b22' if m.author_role == 'client' else '#0f2d1a' }}">
-    <div class="note">{{ 'Вы' if m.author_role == 'client' else 'Поддержка' }} · {{ m.created_at.strftime('%d.%m %H:%M') }}</div>
-    <div style="white-space:pre-wrap;margin-top:6px">{{ m.body }}</div>
-  </div>
-  {% endfor %}
-  {% if ticket.status != 'closed' %}
-  <form method="post" action="/lk/tickets/{{ ticket.id }}/reply">
-    <label>Ваш ответ</label>
-    <textarea name="body" required style="min-height:80px"></textarea>
-    <p style="margin-top:12px"><button type="submit">Ответить</button></p>
-  </form>
-  {% endif %}
-  <p><a href="/lk/tickets" class="btn secondary">← Все обращения</a></p>
-</div>
+<div style="max-width:760px;margin:0 auto"><div class="card">
+<h3>Обращение №{{ ticket.id }}: {{ ticket.subject }}</h3>
+<p>{% if ticket.status=='open' %}<span class="pill info">открыто</span>{% elif ticket.status=='answered' %}<span class="pill ok">ответили</span>{% else %}<span class="pill pause">закрыто</span>{% endif %}</p>
+{% for m in ticket.messages %}
+<div style="margin:12px 0;padding:14px;border-radius:12px;background:{{ '#e8f5ee' if m.author_role=='manager' else '#f1f5f9' }}">
+<div class="muted">{{ 'Поддержка' if m.author_role=='manager' else 'Вы' }} · {{ m.created_at.strftime('%d.%m %H:%M') }}</div>
+<div style="white-space:pre-wrap;margin-top:6px">{{ m.body }}</div></div>
+{% endfor %}
+{% if ticket.status != 'closed' %}
+<form method="post" action="/lk/tickets/{{ ticket.id }}/reply">
+<label>Ваш ответ</label><textarea name="body" required style="min-height:80px"></textarea>
+<button class="btn" type="submit">Ответить</button></form>
+{% endif %}
+<p style="margin-top:16px"><a class="btn secondary" href="/lk/tickets">← Все обращения</a></p>
+</div></div>
 {% endblock %}
