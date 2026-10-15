@@ -2,8 +2,17 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <div class="card">
-<h1>{{ title }}</h1>
+<h1>{{ title }}{% if total %} <span class="note">({{ total }} записей)</span>{% endif %}</h1>
 {% if extra %}{{ extra | safe }}{% endif %}
+{% if search_form %}
+<form method="get" style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap">
+  {% for name, val in search_form.items() %}
+  <input name="{{ name }}" value="{{ val }}" placeholder="{{ name }}" style="max-width:200px">
+  {% endfor %}
+  <button class="btn" type="submit">Найти</button>
+  <a class="btn sec" href="{{ request.url.path }}">Сбросить</a>
+</form>
+{% endif %}
 {% if note %}<p class="note">{{ note }}</p>{% endif %}
 <table>
 <tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}<th>Действия</th></tr>
@@ -18,5 +27,12 @@
 {% endfor %}
 </table>
 {% if not rows %}<p class="note">Пока пусто.</p>{% endif %}
+{% if pagination %}
+<div style="margin-top:16px;display:flex;gap:8px;align-items:center">
+  {% if pagination.prev %}<a class="btn sec" href="?page={{ pagination.prev }}{% if pagination.query %}&{{ pagination.query }}{% endif %}">← Назад</a>{% endif %}
+  <span class="note">Страница {{ pagination.current }} из {{ pagination.pages }}</span>
+  {% if pagination.next %}<a class="btn sec" href="?page={{ pagination.next }}{% if pagination.query %}&{{ pagination.query }}{% endif %}">Вперёд →</a>{% endif %}
+</div>
+{% endif %}
 </div>
 {% endblock %}

@@ -638,6 +638,8 @@ def ops_user_create(request: Request, email: str = Form(), role: str = Form("cli
                     status=status if status in ("active", "blocked") else "active",
                     password_hash=_security.hash_password(new_password)))
         db.commit()
+    else:
+        pass  # Email already exists, silently redirect
     return RedirectResponse("/admin-ops/users", status_code=303)
 
 
@@ -793,5 +795,140 @@ def ops_product_create(request: Request, code: str = Form(), name: str = Form(),
                         unit=unit if unit in ("minute", "second", "gb", "month", "one_time") else "minute",
                         price_minor=price_minor, active=bool(active),
                         config={"protocol": "vless"} if service_type == "vpn" else {}))
+        db.commit()
+    else:
+        pass  # Code already exists, silently redirect
+    return RedirectResponse("/admin-ops/products", status_code=303)
+
+
+# ================= Поиск, пагинация, очистка =================
+def _paginate(total: int, page: int, per_page: int = 50) -> dict:
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, pages))
+    return {
+        "current": page, "pages": pages, "per_page": per_page,
+        "prev": page - 1 if page > 1 else None,
+        "next": page + 1 if page < pages else None,
+    }
+
+
+@router.get("/ledger", response_class=HTMLResponse)
+def ops_ledger(request: Request, page: int = 1, user_id: str = "", reason: str = "", db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    q = select(_LedgerEntry)
+    if user_id.isdigit():
+        q = q.where(_LedgerEntry.wallet_id == int(user_id))
+    if reason.strip():
+        q = q.where(_LedgerEntry.reason.ilike(f"%{reason.strip()}%"))
+    total = db.execute(select(func.count(_LedgerEntry.id))).scalar() or 0
+    p = _paginate(total, page, 50)
+    entries = db.execute(q.order_by(_LedgerEntry.id.desc()).offset((p["current"] - 1) * p["per_page"]).limit(p["per_page"])).scalars().all()
+    rows = [{"cells": [e.id, e.wallet_id, e.entry_type, _rub(e.amount_minor), e.reason, _dt(e.created_at)], "actions": []} for e in entries]
+    query = "&".join(f"{k}={v}" for k, v in [("user_id", user_id), ("reason", reason)] if v)
+    p["query"] = query
+    return templates.TemplateResponse(request, "ops/table.html", {
+        "title": "Финансовый журнал", "columns": ["№", "Кошелёк", "Тип", "Сумма", "Назначение", "Когда"], "rows": rows,
+        "total": total, "pagination": p, "search_form": {"user_id": user_id, "reason": reason},
+        "extra": f'<p><form method="post" action="/admin-ops/ledger/cleanup" style="display:inline" onsubmit="return confirm(\'Удалить записи старше 90 дней?\')"><button class="btn warn" type="submit">Очистить старше 90 дней</button></form></p>'
+    })
+
+
+@router.post("/ledger/cleanup")
+def ops_ledger_cleanup(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from datetime import timedelta
+    from app.core.tz import now as _now
+    cutoff = _now() - timedelta(days=90)
+    db.execute(select(_LedgerEntry).where(_LedgerEntry.created_at < cutoff))
+    old = db.execute(select(_LedgerEntry).where(_LedgerEntry.created_at < cutoff)).scalars().all()
+    for e in old:
+        db.delete(e)
+    db.commit()
+    return RedirectResponse("/admin-ops/ledger", status_code=303)
+
+
+@router.get("/sessions", response_class=HTMLResponse)
+def ops_sessions(request: Request, page: int = 1, status: str = "", service_id: str = "", db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    q = select(_Session)
+    if status.strip():
+        q = q.where(_Session.status == status.strip())
+    if service_id.isdigit():
+        q = q.where(_Session.service_instance_id == int(service_id))
+    total = db.execute(select(func.count(_Session.id))).scalar() or 0
+    p = _paginate(total, page, 50)
+    sessions = db.execute(q.order_by(_Session.id.desc()).offset((p["current"] - 1) * p["per_page"]).limit(p["per_page"])).scalars().all()
+    rows = []
+    for x in sessions:
+        acts = []
+        if x.status == "active":
+            acts.append({"label": "Закрыть", "url": f"/admin-ops/sessions/{x.id}/close", "method": "POST", "cls": "warn"})
+        rows.append({"cells": [x.id, x.service_instance_id, x.status, _dt(x.started_at), _dt(x.ended_at), _rub(x.cost_minor)], "actions": acts})
+    query = "&".join(f"{k}={v}" for k, v in [("status", status), ("service_id", service_id)] if v)
+    p["query"] = query
+    return templates.TemplateResponse(request, "ops/table.html", {
+        "title": "Сессии использования", "columns": ["№", "Услуга", "Статус", "Начало", "Конец", "Стоимость"], "rows": rows,
+        "total": total, "pagination": p, "search_form": {"status": status, "service_id": service_id},
+        "extra": f'<p><form method="post" action="/admin-ops/sessions/cleanup" style="display:inline" onsubmit="return confirm(\'Удалить закрытые сессии старше 30 дней?\')"><button class="btn warn" type="submit">Очистить закрытые старше 30 дней</button></form></p>'
+    })
+
+
+@router.post("/sessions/cleanup")
+def ops_sessions_cleanup(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from datetime import timedelta
+    from app.core.tz import now as _now
+    cutoff = _now() - timedelta(days=30)
+    old = db.execute(select(_Session).where(_Session.status == "closed", _Session.ended_at < cutoff)).scalars().all()
+    for x in old:
+        db.delete(x)
+    db.commit()
+    return RedirectResponse("/admin-ops/sessions", status_code=303)
+
+
+@router.get("/users", response_class=HTMLResponse)
+def ops_users(request: Request, page: int = 1, email: str = "", status: str = "", db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    q = select(User)
+    if email.strip():
+        q = q.where(User.email.ilike(f"%{email.strip()}%"))
+    if status.strip():
+        q = q.where(User.status == status.strip())
+    total = db.execute(select(func.count(User.id))).scalar() or 0
+    p = _paginate(total, page, 50)
+    users = db.execute(q.order_by(User.id).offset((p["current"] - 1) * p["per_page"]).limit(p["per_page"])).scalars().all()
+    rows = []
+    for u in users:
+        acts = []
+        if u.role != "admin":
+            acts.append({"label": "Заблокировать" if u.status == "active" else "Разблокировать",
+                         "url": f"/admin-ops/users/{u.id}/toggle", "method": "POST",
+                         "cls": "warn" if u.status == "active" else ""})
+        acts.append({"label": "Изменить", "url": f"/admin-ops/users/{u.id}", "method": "GET"})
+        rows.append({"cells": [u.id, u.email, u.role, u.status, _dt(u.created_at)], "actions": acts})
+    query = "&".join(f"{k}={v}" for k, v in [("email", email), ("status", status)] if v)
+    p["query"] = query
+    return templates.TemplateResponse(request, "ops/table.html", {
+        "title": "Пользователи", "columns": ["№", "Email", "Роль", "Статус", "Создан"], "rows": rows,
+        "total": total, "pagination": p, "search_form": {"email": email, "status": status},
+        "extra": '<p><a class="btn" href="/admin-ops/users/new">+ Создать пользователя</a></p>'
+    })
+
+
+@router.post("/products/{pid}/delete")
+def ops_product_delete(pid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    p = db.get(_Product, pid)
+    if p is not None:
+        active_services = db.execute(select(func.count(_Service.id)).where(_Service.product_id == pid, _Service.status.in_(("active", "suspended")))).scalar() or 0
+        if active_services > 0:
+            return RedirectResponse("/admin-ops/products", status_code=303)
+        db.delete(p)
         db.commit()
     return RedirectResponse("/admin-ops/products", status_code=303)
