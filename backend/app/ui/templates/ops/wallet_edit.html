@@ -1,0 +1,12 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Кошелёк{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px">
+<h1>Кошелёк пользователя №{{ w.user_id }}</h1>
+<form method="post">
+  <label>Баланс, ₽</label><input name="balance_rub" value="{{ '%.2f' % (w.balance_minor / 100) }}">
+  <label>Обещанный платёж (лимит минуса), ₽</label><input name="promise_rub" value="{{ '%.2f' % ((w.promise_limit_minor or 0) / 100) }}">
+  <button class="btn" type="submit">Сохранить</button> <a class="btn sec" href="/admin-ops/wallets">Отмена</a>
+</form>
+</div>
+{% endblock %}

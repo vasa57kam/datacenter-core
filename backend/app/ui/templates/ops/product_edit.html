@@ -1,0 +1,15 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Тариф{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+<h1>Тариф: {{ p.name }}</h1>
+<form method="post">
+  <label>Название (видят клиенты)</label><input name="name" value="{{ p.name }}">
+  <label>Цена, ₽</label><input name="price_rub" value="{{ '%.2f' % (p.price_minor / 100) }}">
+  <label>Единица</label>
+  <select name="unit">{% for u in ['minute','second','gb','month','one_time'] %}<option value="{{ u }}" {% if p.unit == u %}selected{% endif %}>{{ {'minute':'₽ / минута','second':'₽ / секунда','gb':'₽ / ГиБ','month':'₽ / месяц','one_time':'разово'}[u] }}</option>{% endfor %}</select>
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="active" style="width:auto" {% if p.active %}checked{% endif %}> Тариф виден клиентам</label>
+  <button class="btn" type="submit">Сохранить</button> <a class="btn sec" href="/admin-ops/products">Отмена</a>
+</form>
+</div>
+{% endblock %}
