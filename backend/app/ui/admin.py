@@ -359,8 +359,7 @@ class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
         if "</head>" in html and "admin-redesign-css" not in html:
             html = html.replace("</head>", _ADMIN_CSS + "\n</head>", 1)
         if "</body>" in html and "admin-quicklinks" not in html:
-            html = html.replace("</body>", _QUICK_LINKS_HTML + _ADMIN_JS2 + "
-</body>")
+            html = html.replace("</body>", _QUICK_LINKS_HTML + _ADMIN_JS2 + "\n</body>")
         headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
         return StarletteResponse(content=html, status_code=response.status_code,
                                  headers=headers, media_type=media)
