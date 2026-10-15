@@ -305,6 +305,41 @@ _ADMIN_JS = """<script id="admin-ru">
 </script>"""
 
 
+
+_ADMIN_JS2 = """<script id="admin-ru2">
+(function(){
+  var D={"Actions":"Действия","Logout":"Выйти","Login":"Вход","Username":"Email","Password":"Пароль",
+  "Submit":"Войти","Save":"Сохранить","Save and continue editing":"Сохранить и продолжить",
+  "Save and add another":"Сохранить и добавить","Delete":"Удалить","Edit":"Изменить","Create":"Создать",
+  "Go Back":"Назад","Yes":"Да","No":"Нет","Cancel":"Отмена","Search":"Поиск","Apply":"Применить",
+  "Clear":"Сбросить","Previous":"Назад","Next":"Вперёд","Column":"Колонка","Value":"Значение",
+  "No items found":"Ничего не найдено","Please select at least one item":"Выберите хотя бы одну запись",
+  "Are you sure you want to delete this item?":"Удалить запись?","Password Hash":"Пароль (хэш)",
+  "Role":"Роль","Status":"Статус","Created At":"Создано","User":"Пользователь","Currency":"Валюта",
+  "Balance Minor":"Баланс, коп","Promise Limit Minor":"Обещанный платёж, коп","Version":"Версия",
+  "balance_minor":"Баланс, коп","user_id":"Пользователь","wallet_id":"Кошелёк","amount_minor":"Сумма, коп",
+  "created_at":"Создано","updated_at":"Обновлено","entry_type":"Тип","reason":"Назначение",
+  "id":"№","email":"Email","code":"Код","name":"Название","price_minor":"Цена, коп","active":"Активен",
+  "unit":"Единица","service_type":"Тип","status":"Статус","username":"Логин","node_id":"Нода",
+  "product_id":"Тариф","service_instance_id":"Услуга","started_at":"Начало","ended_at":"Конец",
+  "cost_minor":"Стоимость, коп","action":"Действие","attempts":"Попыток","error":"Ошибка",
+  "method":"Способ","expires_at":"Действует до","kind":"Тип","note":"Примечание"};
+  var R=[[/Showing (\d+) to (\d+) of (\d+) items?/,"Показано $1–$2 из $3"],
+         [/Number of characters: (\d+)/,"Символов: $1"],
+         [/^Edit (.+)/,"Редактирование: $1"],[/^New (.+)/,"Создать: $1"]];
+  function tr(t){t=t.trim();if(D[t])return D[t];
+    for(var i=0;i<R.length;i++){if(R[i][0].test(t))return t.replace(R[i][0],R[i][1]);}return null;}
+  function walk(n){if(n.nodeType===3){var r=tr(n.nodeValue);if(r!==null)n.nodeValue=r;}
+    else if(n.nodeType===1&&!/^(SCRIPT|STYLE|INPUT|TEXTAREA|SELECT)$/.test(n.tagName)){
+      for(var i=0;i<n.childNodes.length;i++)walk(n.childNodes[i]);}}
+  function run(){walk(document.body);
+    var ph=document.querySelectorAll('input[placeholder="Search"]');
+    for(var i=0;i<ph.length;i++)ph[i].placeholder="Поиск";}
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",run);else run();
+})();
+</script>"""
+
+
 class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -324,7 +359,8 @@ class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
         if "</head>" in html and "admin-redesign-css" not in html:
             html = html.replace("</head>", _ADMIN_CSS + "\n</head>", 1)
         if "</body>" in html and "admin-quicklinks" not in html:
-            html = html.replace("</body>", _QUICK_LINKS_HTML + "\n" + _ADMIN_JS + "\n</body>")
+            html = html.replace("</body>", _QUICK_LINKS_HTML + _ADMIN_JS2 + "
+</body>")
         headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
         return StarletteResponse(content=html, status_code=response.status_code,
                                  headers=headers, media_type=media)

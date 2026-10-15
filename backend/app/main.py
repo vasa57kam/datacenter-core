@@ -34,6 +34,20 @@ for router in (
 ):
     app.include_router(router)
 
+
+from starlette.responses import RedirectResponse as _RR
+
+
+@app.get("/admin", include_in_schema=False)
+async def _admin_root_redirect():
+    return _RR("/admin-ops/", status_code=302)
+
+
+@app.get("/admin/", include_in_schema=False)
+async def _admin_root_redirect_slash():
+    return _RR("/admin-ops/", status_code=302)
+
+
 setup_admin(app, secret_key=settings.jwt_secret)
 
 
