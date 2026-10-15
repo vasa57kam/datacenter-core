@@ -208,17 +208,101 @@ _QUICK_LINKS_HTML = """<div id="admin-quicklinks" style="position:fixed;bottom:0
 
 
 _ADMIN_CSS = """<style id="admin-redesign-css">
-:root{--tblr-primary:#16a34a;--tblr-primary-rgb:22,163,74;--tblr-link-color:#16a34a}
-body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f6fb}
-.navbar-vertical, .navbar.navbar-dark, .navbar[class*="bg-dark"]{background:#0f172a!important}
-.card{border:none!important;border-radius:14px!important;box-shadow:0 8px 24px rgba(15,23,42,.08)!important}
-.btn-primary{background:#16a34a!important;border-color:#16a34a!important}
+:root{--tblr-primary:#16a34a;--tblr-primary-rgb:22,163,74;--tblr-link-color:#16a34a;--tblr-body-color:#0f172a}
+body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f6f8fb;font-size:14px}
+.navbar-vertical,.navbar.navbar-dark,.navbar[class*="bg-dark"]{background:#0f172a!important;border-right:1px solid #1e293b}
+.navbar-vertical .nav-link{color:#cbd5e1;border-radius:10px;margin:2px 8px;font-size:14px}
+.navbar-vertical .nav-link:hover{background:rgba(255,255,255,.08);color:#fff}
+.navbar-vertical .nav-link.active{background:rgba(22,163,74,.18)!important;color:#4ade80!important}
+.navbar-vertical .nav-item-header{color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin:12px 16px 4px}
+.card{border:none!important;border-radius:16px!important;box-shadow:0 6px 20px rgba(15,23,42,.06)!important}
+.card .card-header{background:#fff;border-bottom:1px solid #eef2f7;font-weight:700}
+.btn-primary{background:#16a34a!important;border-color:#16a34a!important;color:#fff}
 .btn-primary:hover{background:#15803d!important}
-.table thead th{color:#64748b!important;font-weight:600;border-bottom:2px solid #e2e8f0}
-.nav-link.active, .nav-link[aria-current="page"]{background:rgba(22,163,74,.14)!important;color:#16a34a!important;border-radius:10px}
+.btn-outline-primary{color:#16a34a!important;border-color:#86efac!important}
+.btn-outline-primary:hover{background:#dcfce7!important;color:#14532d!important}
+.btn-danger{background:#e11d48!important;border-color:#e11d48!important}
+.table{font-size:14px}
+.table thead th{background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;text-transform:none;border-bottom:2px solid #e2e8f0}
+.table tbody td{vertical-align:middle}
 .badge.bg-primary{background:#16a34a!important}
 a{color:#16a34a}
+.dropdown-menu{border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(15,23,42,.12)}
+.form-control,.form-select{border-radius:10px;border-color:#cbd5e1;font-size:14px}
+.form-control:focus,.form-select:focus{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)}
+.page-title{font-weight:800}
+#admin-quicklinks{border-top:2px solid #16a34a!important}
 </style>"""
+
+
+
+_ADMIN_JS = """<script id="admin-ru">
+(function(){
+  var D = {
+    "Actions":"Действия","Logout":"Выйти","Login":"Вход","Username":"Логин","Password":"Пароль",
+    "Submit":"Войти","Save":"Сохранить","Save and continue editing":"Сохранить и продолжить",
+    "Save and add another":"Сохранить и добавить ещё","Delete":"Удалить","Edit":"Изменить",
+    "Create":"Создать","Go Back":"Назад","Yes":"Да","No":"Нет","Cancel":"Отмена","OK":"ОК",
+    "Search":"Поиск","Apply":"Применить","Clear":"Сбросить","Previous":"Назад","Next":"Вперёд",
+    "Column":"Колонка","Value":"Значение","No items found":"Ничего не найдено",
+    "Please select at least one item":"Выберите хотя бы одну запись",
+    "Are you sure you want to delete this item?":"Удалить эту запись?",
+    "Are you sure you want to delete selected items?":"Удалить выбранные записи?",
+    "Are you sure you want to remove this item?":"Удалить эту запись?",
+    "id":"№","email":"Email","role":"Роль","status":"Статус","created_at":"Создано",
+    "updated_at":"Обновлено","user_id":"Пользователь","wallet_id":"Кошелёк",
+    "balance_minor":"Баланс, коп","promise_limit_minor":"Обещанный платёж, коп",
+    "amount_minor":"Сумма, коп","reason":"Назначение","entry_type":"Тип операции",
+    "method":"Способ","processed_at":"Обработано","comment":"Комментарий",
+    "code":"Код","name":"Название","service_type":"Тип услуги","unit":"Единица",
+    "price_minor":"Цена, коп","active":"Активен","product_id":"Тариф",
+    "node_id":"Нода","username":"Логин клиента","uuid":"UUID","protocol":"Протокол",
+    "country":"Страна","api_kind":"Тип API","api_url":"Адрес API","endpoint_host":"Хост",
+    "endpoint_port":"Порт","external_id":"Внешний ID","public_key":"Публичный ключ",
+    "service_instance_id":"Услуга","vpn_account_id":"VPN-аккаунт","started_at":"Начало",
+    "ended_at":"Окончание","last_heartbeat_at":"Последний сигнал","rx_bytes":"Принято, байт",
+    "tx_bytes":"Передано, байт","charged_minutes":"Минут","cost_minor":"Стоимость, коп",
+    "traffic_pending_bytes":"Трафик к списанию, байт","external_session_id":"Внешняя сессия",
+    "entity_type":"Тип объекта","entity_id":"Объект","action":"Действие","attempts":"Попыток",
+    "error":"Ошибка","result":"Результат","payload":"Данные","kind":"Тип",
+    "max_activations":"Максимум активаций","activations_count":"Активировано",
+    "expires_at":"Действует до","note":"Примечание","subject":"Тема",
+    "author_role":"Автор","body":"Текст","ticket_id":"Тикет","secret_enc":"Секрет",
+    "password_hash":"Пароль (хэш)","is_admin":"Админ","category":"Категория",
+    "config":"Конфигурация","extra":"Доп. данные","sub_id":"ID подписки",
+    "limit_ip":"Лимит IP","total_gb":"Лимит трафика","enable":"Включён",
+    "Showing":"Показано","items":"записей","item":"запись"
+  };
+  var R = [
+    [/Showing (\\d+) to (\\d+) of (\\d+) items?/, "Показано $1–$2 из $3"],
+    [/^\\((\\d+) rows?\\)$/, "($1 строк)"],
+    [/^(\\d+) items?$/, "$1 записей"]
+  ];
+  function tr(t){
+    t = t.trim();
+    if (D[t]) return D[t];
+    for (var i=0;i<R.length;i++){ if (R[i][0].test(t)) return t.replace(R[i][0], R[i][1]); }
+    return null;
+  }
+  function walk(node){
+    if (node.nodeType === 3){
+      var r = tr(node.nodeValue);
+      if (r !== null) node.nodeValue = r;
+    } else if (node.nodeType === 1 && !/^(SCRIPT|STYLE|INPUT|TEXTAREA|SELECT)$/.test(node.tagName)){
+      for (var i=0;i<node.childNodes.length;i++) walk(node.childNodes[i]);
+    }
+  }
+  function run(){
+    walk(document.body);
+    var ph = document.querySelectorAll('input[placeholder="Search"]');
+    for (var i=0;i<ph.length;i++) ph[i].placeholder = "Поиск";
+    var t = document.title;
+    if (t.indexOf("Admin") === 0) document.title = t.replace("Admin", "Админка");
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+})();
+</script>"""
 
 
 class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
@@ -240,7 +324,7 @@ class AdminQuickLinksMiddleware(BaseHTTPMiddleware):
         if "</head>" in html and "admin-redesign-css" not in html:
             html = html.replace("</head>", _ADMIN_CSS + "\n</head>", 1)
         if "</body>" in html and "admin-quicklinks" not in html:
-            html = html.replace("</body>", _QUICK_LINKS_HTML + "\n</body>")
+            html = html.replace("</body>", _QUICK_LINKS_HTML + "\n" + _ADMIN_JS + "\n</body>")
         headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
         return StarletteResponse(content=html, status_code=response.status_code,
                                  headers=headers, media_type=media)
