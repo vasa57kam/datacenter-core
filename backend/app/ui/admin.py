@@ -4,6 +4,7 @@ from sqladmin import Admin, ModelView, action
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import select
 from starlette.requests import Request
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
 from app.core import security
@@ -174,7 +175,9 @@ class PaymentAdmin(ModelView, model=PaymentRequest):
         return self._redirect_list(request)
 
 
-def setup_admin(app):
+def setup_admin(app, secret_key: str = ""):
+    if not any(getattr(m, "cls", None) is SessionMiddleware for m in app.user_middleware):
+        app.add_middleware(SessionMiddleware, secret_key=secret_key or "itkam34-billing-sessions")
     admin = Admin(
         app, engine,
         authentication_backend=AdminAuth(),
