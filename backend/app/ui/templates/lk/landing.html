@@ -20,7 +20,7 @@
     {% for p in products %}
     <tr>
       <td>{{ p.name }}</td>
-      <td>{{ p.service_type | upper }}</td>
+      <td>{{ p.service_type | ru_type }}</td>
       <td>{{ (p.price_minor / 100) | round(2) }} ₽ / {% if p.unit == 'second' %}сек{% elif p.unit == 'minute' %}мин{% elif p.unit == 'month' %}мес{% elif p.unit == 'hour' %}ч{% elif p.unit == 'day' %}день{% else %}раз{% endif %}</td>
       <td><a href="/lk/order?product={{ p.code }}" class="btn">Подключить</a></td>
     </tr>

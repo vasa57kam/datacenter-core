@@ -55,6 +55,11 @@ def _ru_reason(r: str) -> str:
     return r
 
 
+TYPE_RU = {
+    "vpn": "Защищённый канал", "vps": "Сервер", "cctv": "Видеонаблюдение",
+    "hosting": "Хостинг", "storage": "Хранилище", "mail": "Почта",
+}
+templates.env.filters["ru_type"] = lambda t: TYPE_RU.get((t or "").lower(), t)
 templates.env.filters["ru_reason"] = _ru_reason
 templates.env.filters["ru_status"] = lambda s: RU_STATUS.get(s, s)
 templates.env.filters["ru_payreq"] = lambda s: RU_PAYREQ.get(s, s)
@@ -388,11 +393,12 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
             cfg = get_adapter(node).render_config(db, account)
             link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
     qr_svg = ""
-    if link:
+    qr_target = sub_url or link
+    if qr_target:
         try:
             import qrcode
             from qrcode.image.svg import SvgPathImage
-            qr_svg = qrcode.make(link, image_factory=SvgPathImage).to_string(encoding="unicode")
+            qr_svg = qrcode.make(qr_target, image_factory=SvgPathImage).to_string(encoding="unicode")
         except Exception:
             qr_svg = ""
     return templates.TemplateResponse(request, "lk/config.html", {
