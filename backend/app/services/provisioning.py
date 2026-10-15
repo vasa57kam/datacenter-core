@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+
+from app.core.tz import MSK
 from typing import Any
 
 from sqlalchemy import select

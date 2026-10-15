@@ -2,6 +2,8 @@ from app.core.tz import now as tz_now
 import logging
 from datetime import datetime, timedelta, timezone
 
+from app.core.tz import MSK
+
 from sqlalchemy import select
 
 from app.core.config import settings
