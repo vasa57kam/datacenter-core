@@ -383,7 +383,31 @@ def setup_admin(app, secret_key: str) -> None:
         title="ITKAM34 Billing",
         base_url="/admin",
     )
+
+
+from sqladmin import BaseView, expose
+from starlette.responses import RedirectResponse
+
+class OpsView(BaseView):
+    name = "⚡ Быстрые операции"
+    icon = "fa-solid fa-bolt"
+    category = "Операции"
+    
+    @expose("/ops", methods=["GET"])
+    async def list_view(self, request):
+        return RedirectResponse("/admin-ops/", status_code=302)
+
+class KBView(BaseView):
+    name = "📚 База знаний"
+    icon = "fa-solid fa-book"
+    category = "Справка"
+    
+    @expose("/kb", methods=["GET"])
+    async def list_view(self, request):
+        return RedirectResponse("/admin-help", status_code=302)
+
+
     for view in (UserAdmin, WalletAdmin, LedgerAdmin, ProductAdmin, ServiceAdmin,
-                 NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin):
+                 NodeAdmin, AccountAdmin, UsageAdmin, TaskAdmin, PaymentAdmin, OpsView, KBView):
         admin.add_view(view)
 
