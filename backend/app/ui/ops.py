@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import security
@@ -304,25 +304,6 @@ def _dt(v) -> str:
     return v.strftime("%d.%m.%y %H:%M") if v else "—"
 
 
-@router.get("/users", response_class=HTMLResponse)
-def ops_users(request: Request, db: Session = Depends(get_db)):
-    r = _guard(request)
-    if r: return r
-    users = db.execute(select(User).order_by(User.id)).scalars().all()
-    rows = []
-    for u in users:
-        acts = []
-        if u.role != "admin":
-            acts.append({"label": "Заблокировать" if u.status == "active" else "Разблокировать",
-                         "url": f"/admin-ops/users/{u.id}/toggle", "method": "POST",
-                         "cls": "warn" if u.status == "active" else ""})
-        acts.append({"label": "Изменить", "url": f"/admin-ops/users/{u.id}", "method": "GET"})
-        rows.append({"cells": [u.id, u.email, u.role, u.status, _dt(u.created_at)], "actions": acts})
-    return templates.TemplateResponse(request, "ops/table.html", {
-        "title": "Пользователи", "columns": ["№", "Email", "Роль", "Статус", "Создан"], "rows": rows,
-        "extra": '<p><a class="btn" href="/admin-ops/users/new">+ Создать пользователя</a></p>'})
-
-
 @router.post("/users/{uid}/toggle")
 def ops_user_toggle(uid: int, request: Request, db: Session = Depends(get_db)):
     r = _guard(request)
@@ -369,17 +350,6 @@ def ops_wallet_save(wid: int, request: Request, balance_rub: str = Form(), promi
     return RedirectResponse("/admin-ops/wallets", status_code=303)
 
 
-@router.get("/ledger", response_class=HTMLResponse)
-def ops_ledger(request: Request, db: Session = Depends(get_db)):
-    r = _guard(request)
-    if r: return r
-    entries = db.execute(select(_LedgerEntry).order_by(_LedgerEntry.id.desc()).limit(300)).scalars().all()
-    rows = [{"cells": [e.id, e.wallet_id, e.entry_type, _rub(e.amount_minor), e.reason, _dt(e.created_at)], "actions": []}
-            for e in entries]
-    return templates.TemplateResponse(request, "ops/table.html", {
-        "title": "Финансовый журнал", "columns": ["№", "Кошелёк", "Тип", "Сумма", "Назначение", "Когда"], "rows": rows})
-
-
 @router.get("/products", response_class=HTMLResponse)
 def ops_products(request: Request, db: Session = Depends(get_db)):
     r = _guard(request)
@@ -389,6 +359,7 @@ def ops_products(request: Request, db: Session = Depends(get_db)):
              "actions": [
                  {"label": "Изменить", "url": f"/admin-ops/products/{p.id}", "method": "GET"},
                  {"label": "Выключить" if p.active else "Включить", "url": f"/admin-ops/products/{p.id}/toggle", "method": "POST", "cls": "sec"},
+                 {"label": "Удалить", "url": f"/admin-ops/products/{p.id}/delete", "method": "POST", "cls": "danger", "confirm": "Удалить тариф? Доступно только если нет активных услуг."},
              ]} for p in products]
     return templates.TemplateResponse(request, "ops/table.html", {
         "title": "Тарифы", "columns": ["№", "Название", "Единица", "Цена", "Виден"], "rows": rows,
@@ -528,21 +499,6 @@ def ops_accounts(request: Request, db: Session = Depends(get_db)):
         "title": "Аккаунты клиентов", "columns": ["№", "Услуга", "Логин клиента", "Статус", "Создан"], "rows": rows})
 
 
-@router.get("/sessions", response_class=HTMLResponse)
-def ops_sessions(request: Request, db: Session = Depends(get_db)):
-    r = _guard(request)
-    if r: return r
-    sessions = db.execute(select(_Session).order_by(_Session.id.desc()).limit(300)).scalars().all()
-    rows = []
-    for x in sessions:
-        acts = []
-        if x.status == "active":
-            acts.append({"label": "Закрыть", "url": f"/admin-ops/sessions/{x.id}/close", "method": "POST", "cls": "warn"})
-        rows.append({"cells": [x.id, x.service_instance_id, x.status, _dt(x.started_at), _dt(x.ended_at), _rub(x.cost_minor)], "actions": acts})
-    return templates.TemplateResponse(request, "ops/table.html", {
-        "title": "Сессии использования", "columns": ["№", "Услуга", "Статус", "Начало", "Конец", "Стоимость"], "rows": rows})
-
-
 @router.get("/tasks", response_class=HTMLResponse)
 def ops_tasks(request: Request, db: Session = Depends(get_db)):
     r = _guard(request)
@@ -553,6 +509,7 @@ def ops_tasks(request: Request, db: Session = Depends(get_db)):
         acts = []
         if t.status in ("error", "pending"):
             acts.append({"label": "Повторить", "url": f"/admin-ops/tasks/{t.id}/retry", "method": "POST"})
+            acts.append({"label": "Отменить", "url": f"/admin-ops/tasks/{t.id}/cancel", "method": "POST", "cls": "danger"})
         rows.append({"cells": [t.id, t.entity_type, t.entity_id, t.action, t.status, t.attempts, (t.error or "")[:60]], "actions": acts})
     return templates.TemplateResponse(request, "ops/table.html", {
         "title": "Задачи выдачи", "columns": ["№", "Объект", "ID", "Действие", "Статус", "Попыток", "Ошибка"], "rows": rows})
