@@ -48,9 +48,15 @@ label{font-size:12px;color:#8b949e;font-weight:600}
   <a href="/admin-ops/passwords">Пароли</a>
   <a href="/admin-ops/nodes/import">Импорт ноды</a>
   <a href="/admin-ops/tariffs">Цены</a>
+  <a href="/admin-ops/notifications">🔔 Уведомления <span id="notif-badge" style="background:#da3633;border-radius:9px;padding:1px 7px;font-size:11px"></span></a>
+  <a href="/admin-ops/audit">🧾 Аудит</a>
+  <a href="/admin-ops/stats">📊 Статистика</a>
   <a href="/admin-help">📚 База знаний</a>
   <a href="/admin/user/list" title="sqladmin: расширенный режим для сложных случаев">⚙️ Расширенная</a>
 </nav>
 <main>{% block content %}{% endblock %}</main>
+<script>
+setInterval(async()=>{try{const r=await fetch('/admin-ops/notifications/count.json');if(!r.ok)return;const d=await r.json();const b=document.getElementById('notif-badge');if(b)b.textContent=d.unread>0?d.unread:'';}catch(e){}},30000);
+</script>
 </body>
 </html>

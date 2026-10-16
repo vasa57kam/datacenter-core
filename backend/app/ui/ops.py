@@ -311,6 +311,7 @@ def ops_user_toggle(uid: int, request: Request, db: Session = Depends(get_db)):
     u = db.get(User, uid)
     if u is not None and u.role != "admin":
         u.status = "blocked" if u.status == "active" else "active"
+        _audit(db, request, "user_toggle", f"user={uid}")
         db.commit()
     return RedirectResponse("/admin-ops/users", status_code=303)
 
@@ -346,6 +347,7 @@ def ops_wallet_save(wid: int, request: Request, balance_rub: str = Form(), promi
         except ValueError: pass
         try: w.promise_limit_minor = max(0, int(round(float((promise_rub or "0").replace(",", ".")) * 100)))
         except ValueError: pass
+        _audit(db, request, "wallet_edit", f"wallet={wid}")
         db.commit()
     return RedirectResponse("/admin-ops/wallets", status_code=303)
 
@@ -550,11 +552,9 @@ def ops_payreq_approve(pid: int, request: Request, db: Session = Depends(get_db)
     if r: return r
     pr = db.get(_PayReq, pid)
     if pr is not None and pr.status == "pending":
-        wallet = _ledger.get_wallet(db, pr.user_id)
-        _ledger.credit(db, wallet, pr.amount_minor, reason=f"payment_{pr.method}",
-                       entity_type="payment_request", entity_id=pr.id,
-                       idempotency_key=f"payreq:{pr.id}")
-        pr.status = "approved"
+        from app.services.payments import approve_payreq
+        approve_payreq(db, pr, actor_email="админ")
+        _audit(db, request, "payreq_approve", f"#{pid}")
         db.commit()
     return RedirectResponse("/admin-ops/payreqs", status_code=303)
 
@@ -889,3 +889,140 @@ def ops_product_delete(pid: int, request: Request, db: Session = Depends(get_db)
         db.delete(p)
         db.commit()
     return RedirectResponse("/admin-ops/products", status_code=303)
+
+
+# ================= v81: уведомления, аудит, статистика, bulk, CSV =================
+from app.models import AuditLog as _Audit, Notification as _Notif
+
+
+def _audit(db, request, action: str, target: str = "") -> None:
+    uid = request.session.get("admin_uid") or request.session.get("uid")
+    email = ""
+    if uid:
+        u = db.get(User, int(uid))
+        email = u.email if u is not None else ""
+    db.add(_Audit(actor_id=uid, actor_email=email, action=action, target=target))
+
+
+@router.get("/notifications", response_class=HTMLResponse)
+def ops_notifications(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    items = db.execute(select(_Notif).order_by(_Notif.id.desc()).limit(200)).scalars().all()
+    return templates.TemplateResponse(request, "ops/notifications.html", {"items": items})
+
+
+@router.get("/notifications/count.json")
+def ops_notifications_count(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return {"unread": 0}
+    n = db.execute(select(func.count(_Notif.id)).where(_Notif.read_at.is_(None))).scalar() or 0
+    return {"unread": n}
+
+
+@router.post("/notifications/{nid}/read")
+def ops_notification_read(nid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from app.core.tz import now as _now
+    n = db.get(_Notif, nid)
+    if n is not None:
+        n.read_at = _now()
+        db.commit()
+    return RedirectResponse("/admin-ops/notifications", status_code=303)
+
+
+@router.post("/notifications/read_all")
+def ops_notifications_read_all(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from app.core.tz import now as _now
+    unread = db.execute(select(_Notif).where(_Notif.read_at.is_(None))).scalars().all()
+    for n in unread:
+        n.read_at = _now()
+    db.commit()
+    return RedirectResponse("/admin-ops/notifications", status_code=303)
+
+
+@router.get("/audit", response_class=HTMLResponse)
+def ops_audit(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    items = db.execute(select(_Audit).order_by(_Audit.id.desc()).limit(300)).scalars().all()
+    return templates.TemplateResponse(request, "ops/audit.html", {"items": items})
+
+
+@router.get("/stats", response_class=HTMLResponse)
+def ops_stats(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from datetime import timedelta
+    from app.core.tz import now as _now
+    days = []
+    total = 0
+    for i in range(13, -1, -1):
+        d0 = (_now() - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        d1 = d0 + timedelta(days=1)
+        summ = db.execute(
+            select(func.coalesce(func.sum(_LedgerEntry.amount_minor), 0)).where(
+                _LedgerEntry.entry_type == "debit",
+                _LedgerEntry.created_at >= d0, _LedgerEntry.created_at < d1)
+        ).scalar() or 0
+        rub = round(abs(summ) / 100, 2)
+        total += rub
+        days.append({"label": d0.strftime("%d.%m"), "rub": rub, "raw": rub})
+    mx = max([d["raw"] for d in days] + [1])
+    for d in days:
+        d["h"] = int(4 + 150 * d["raw"] / mx)
+    kpi = {
+        "clients": db.execute(select(func.count(User.id)).where(User.role == "client")).scalar() or 0,
+        "active_services": db.execute(select(func.count(_Service.id)).where(_Service.status == "active")).scalar() or 0,
+        "revenue_total": round(total, 2),
+        "pending": db.execute(select(func.count(_PayReq.id)).where(_PayReq.status == "pending")).scalar() or 0,
+    }
+    return templates.TemplateResponse(request, "ops/stats.html", {"chart": days, "kpi": kpi})
+
+
+@router.get("/ledger/export.csv")
+def ops_ledger_export(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from fastapi.responses import StreamingResponse
+    import csv, io
+    entries = db.execute(select(_LedgerEntry).order_by(_LedgerEntry.id.desc()).limit(10000)).scalars().all()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["ID", "Wallet", "Type", "Amount RUB", "Reason", "Created"])
+    for e in entries:
+        w.writerow([e.id, e.wallet_id, e.entry_type, f"{e.amount_minor/100:.2f}", e.reason, e.created_at.isoformat()])
+    out.seek(0)
+    return StreamingResponse(iter([out.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=ledger.csv"})
+
+
+@router.post("/users/bulk_block")
+def ops_users_bulk_block(request: Request, email: str = Form(""), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    q = select(User).where(User.role == "client")
+    if email.strip():
+        q = q.where(User.email.ilike(f"%{email.strip()}%"))
+    users = db.execute(q).scalars().all()
+    for u in users:
+        u.status = "blocked"
+    _audit(db, request, "bulk_block", f"filter={email!r} count={len(users)}")
+    db.commit()
+    return RedirectResponse("/admin-ops/users", status_code=303)
+
+
+@router.post("/users/{uid}/suspend_all")
+def ops_user_suspend_all(uid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    services = db.execute(select(_Service).where(_Service.user_id == uid, _Service.status == "active")).scalars().all()
+    for sv in services:
+        sv.status = "suspended"
+        _enqueue(db, "service_instance", sv.id, "suspend")
+    _audit(db, request, "suspend_all", f"user={uid} count={len(services)}")
+    db.commit()
+    return RedirectResponse("/admin-ops/services", status_code=303)

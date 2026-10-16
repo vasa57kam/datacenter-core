@@ -1,0 +1,22 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Статистика{% endblock %}
+{% block content %}
+<div class="card">
+<h1>📊 Доход за 14 дней</h1>
+<div style="display:flex;gap:6px;align-items:flex-end;height:180px;margin:16px 0">
+{% for d in chart %}
+<div style="flex:1;text-align:center">
+  <div style="background:#238636;border-radius:6px 6px 0 0;height:{{ d.h }}px" title="{{ d.label }}: {{ d.rub }} ₽"></div>
+  <div class="note">{{ d.label }}</div>
+  <div class="note">{{ d.rub }}</div>
+</div>
+{% endfor %}
+</div>
+<div class="grid cols">
+  <div class="stat"><b>{{ kpi.clients }}</b>клиентов всего</div>
+  <div class="stat"><b>{{ kpi.active_services }}</b>активных услуг</div>
+  <div class="stat"><b>{{ kpi.revenue_total }} ₽</b>списано за 14 дней</div>
+  <div class="stat"><b>{{ kpi.pending }}</b>заявок ждут</div>
+</div>
+</div>
+{% endblock %}

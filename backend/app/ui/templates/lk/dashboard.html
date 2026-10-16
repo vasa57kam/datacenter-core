@@ -16,6 +16,7 @@
       <p class="muted" id="mnote">{{ notes['transfer'] }}</p>
       <label>Комментарий (необязательно)</label><input name="comment" placeholder="Email или детали платежа">
       <button class="btn" type="submit">Создать заявку</button>
+{% if (wallet.auto_approved_count or 0) == 0 %}<p class="muted">🎁 Первое пополнение до 500 ₽ зачисляется мгновенно — доверительный лимит (одноразово).</p>{% endif %}
     </form>
   </div>
 </div>

@@ -1,0 +1,11 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Журнал изменений{% endblock %}
+{% block content %}
+<div class="card">
+<h1>🧾 Журнал изменений (аудит)</h1>
+<table><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Объект</th></tr>
+{% for a in items %}<tr><td>{{ a.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ a.actor_email or 'система' }}</td><td>{{ a.action }}</td><td>{{ a.target }}</td></tr>{% endfor %}
+</table>
+{% if not items %}<p class="note">Записей нет.</p>{% endif %}
+</div>
+{% endblock %}

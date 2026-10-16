@@ -1,0 +1,16 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Уведомления{% endblock %}
+{% block content %}
+<div class="card">
+<h1>🔔 Уведомления</h1>
+<p><form method="post" action="/admin-ops/notifications/read_all" style="display:inline"><button class="btn sec" type="submit">Отметить все прочитанными</button></form></p>
+<table><tr><th>Когда</th><th>Сообщение</th><th></th></tr>
+{% for n in items %}
+<tr style="{{ '' if n.read_at else 'background:rgba(35,134,54,.12)' }}">
+<td>{{ n.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ n.message }}</td>
+<td>{% if not n.read_at %}<form method="post" action="/admin-ops/notifications/{{ n.id }}/read"><button class="btn sec" type="submit">✓</button></form>{% endif %}</td>
+</tr>{% endfor %}
+</table>
+{% if not items %}<p class="note">Пока тихо.</p>{% endif %}
+</div>
+{% endblock %}

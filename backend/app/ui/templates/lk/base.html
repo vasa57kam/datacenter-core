@@ -41,7 +41,7 @@ a{color:#58a6ff}
 <nav>
   <a class="home" href="/">ITKAM34</a>
   {% if user %}
-  <a href="/lk/">Кабинет</a><a href="/lk/order">Подключить</a><a href="/lk/tickets">Поддержка</a>
+  <a href="/lk/">Кабинет</a><a href="/lk/order">Подключить</a><a href="/lk/tickets">Поддержка</a>{% if user and user.role in ("cashier", "admin") %}<a href="/lk/kassa">Касса</a>{% endif %}
   <a href="#" onclick="event.preventDefault();document.getElementById('logout-form').submit()">Выйти</a>
   {% else %}
   <a href="/lk/login">Вход</a><a href="/lk/register">Регистрация</a>

@@ -17,6 +17,8 @@ from app.models import (
     TicketMessage, User, VpnAccount, VpnNode,
 )
 from app.services import ledger
+from app.services.payments import approve_payreq
+from app.core.notifications import notify_admin
 from app.services.provisioning import enqueue_task
 
 router = APIRouter(prefix="/lk", tags=["lk"])
@@ -131,7 +133,7 @@ def landing(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return templates.TemplateResponse(request, "lk/register.html", {"error": None})
+    return templates.TemplateResponse(request, "lk/register.html", {"error": None, "ref": request.query_params.get("ref", "")})
 
 
 @router.post("/register")
@@ -139,6 +141,7 @@ def register(
     request: Request,
     email: str = Form(),
     password: str = Form(min_length=8),
+    ref: str = Form(""),
     db: Session = Depends(get_db),
 ):
     email = security.normalize_email(email)
@@ -149,7 +152,13 @@ def register(
     exists = db.execute(select(User).where(func.lower(User.email) == email)).scalar_one_or_none()
     taken = exists is not None
     if not taken:
-        user = User(email=email, password_hash=security.hash_password(password))
+        import uuid as _uuid
+        referred = None
+        if ref.strip():
+            referred = db.execute(select(User).where(User.referral_code == ref.strip())).scalar_one_or_none()
+            referred = referred.id if referred is not None else None
+        user = User(email=email, password_hash=security.hash_password(password),
+                    referral_code=_uuid.uuid4().hex[:10], referred_by=referred)
         db.add(user)
         try:
             db.flush()
@@ -251,10 +260,21 @@ def topup(
         return RedirectResponse("/lk/", status_code=303)
     if method not in dict(TOPUP_METHODS):
         method = "other"
-    db.add(PaymentRequest(
+    wallet = ledger.get_wallet(db, user.id)
+    pr = PaymentRequest(
         user_id=user.id, amount_minor=amount_minor, method=method,
         comment=comment.strip() or None, status="pending",
-    ))
+    )
+    db.add(pr)
+    db.flush()
+    # Одноразовый доверительный лимит: первое пополнение до 500 ₽ зачисляется сразу.
+    AUTO_APPROVE_LIMIT = 50000
+    if (wallet.auto_approved_count or 0) == 0 and amount_minor <= AUTO_APPROVE_LIMIT:
+        approve_payreq(db, pr, actor_email="авто (доверительный лимит)")
+        wallet.auto_approved_count = (wallet.auto_approved_count or 0) + 1
+        notify_admin(db, f"🤖 Автоподтверждение (1 раз): #{pr.id} {(amount_minor/100):.0f} ₽ от {user.email}")
+    else:
+        notify_admin(db, f"💳 Новая заявка #{pr.id}: {(amount_minor/100):.0f} ₽ ({method}) от {user.email}")
     db.commit()
     return RedirectResponse("/lk/", status_code=303)
 
@@ -551,3 +571,41 @@ def coupon_activate(request: Request, code: str = Form(), db: Session = Depends(
     return templates.TemplateResponse(request, "lk/coupon_result.html", {
         "user": user, "ok": False, "message": error or "Не удалось активировать код",
     }, status_code=400)
+
+
+# ================= Касса (роль cashier и admin) =================
+
+@router.get("/kassa", response_class=HTMLResponse)
+def kassa_page(request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None or user.role not in ("cashier", "admin"):
+        raise HTTPException(status_code=403)
+    reqs = db.execute(
+        select(PaymentRequest).where(PaymentRequest.status == "pending")
+        .order_by(PaymentRequest.id.desc())
+    ).scalars().all()
+    return templates.TemplateResponse(request, "lk/kassa.html", {"user": user, "reqs": reqs})
+
+
+@router.post("/kassa/{pid}/approve")
+def kassa_approve(pid: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None or user.role not in ("cashier", "admin"):
+        raise HTTPException(status_code=403)
+    pr = db.get(PaymentRequest, pid)
+    if pr is not None and pr.status == "pending" and pr.method == "cash":
+        approve_payreq(db, pr, actor_email=user.email)
+        db.commit()
+    return RedirectResponse("/lk/kassa", status_code=303)
+
+
+@router.post("/kassa/{pid}/reject")
+def kassa_reject(pid: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None or user.role not in ("cashier", "admin"):
+        raise HTTPException(status_code=403)
+    pr = db.get(PaymentRequest, pid)
+    if pr is not None and pr.status == "pending" and pr.method == "cash":
+        pr.status = "rejected"
+        db.commit()
+    return RedirectResponse("/lk/kassa", status_code=303)

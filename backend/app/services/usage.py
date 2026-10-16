@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.db import SessionLocal
 from app.models import Product, ServiceInstance, UsageSession, VpnAccount, VpnNode
 from app.services import ledger
+from app.core.notifications import notify_admin
 from app.services.provisioning import enqueue_task
 
 log = logging.getLogger(__name__)
@@ -74,6 +75,9 @@ def _suspend(db, service: ServiceInstance, session: UsageSession) -> None:
     if service.status != "suspended":
         service.status = "suspended"
         enqueue_task(db, "service_instance", service.id, "suspend")
+        from app.models import User as _U
+        u = db.get(_U, service.user_id)
+        notify_admin(db, f"⛔ Услуга #{service.id} ({u.email if u else '?'}) приостановлена: недостаточно средств", kind="warn")
     session.status = "closed"
     session.ended_at = tz_now()
     db.commit()

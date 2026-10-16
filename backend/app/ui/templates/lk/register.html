@@ -7,8 +7,9 @@
 <form method="post">
 <label>Email</label><input name="email" type="email" required placeholder="you@example.com">
 <label>Пароль</label><input name="password" type="password" minlength="8" required placeholder="Минимум 8 символов">
+<input type="hidden" name="ref" value="{{ ref or '' }}">
 <button class="btn" type="submit" style="width:100%">Зарегистрироваться</button>
 </form>
-<p class="muted" style="text-align:center">Уже есть кабинет? <a href="/lk/login">Вход</a></p>
+<p class="muted" style="text-align:center">Уже есть кабинет? <a href="/lk/login">Вход</a><br>Приглашение друга: поделись ссылкой /lk/register?ref=ТВОЙ_КОД — друг получит мгновенное первое пополнение, ты 50 ₽ бонусом.</p>
 </div></div>
 {% endblock %}

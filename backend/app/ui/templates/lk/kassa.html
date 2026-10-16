@@ -1,0 +1,17 @@
+{% extends "lk/base.html" %}
+{% block title %}Касса{% endblock %}
+{% block content %}
+<div class="card">
+<h3>💰 Касса: наличные пополнения</h3>
+<p class="muted">Принял наличные → проверь заявку → «Зачислить». Доступно роли кассир и администратор.</p>
+{% if reqs %}
+<table><tr><th>№</th><th>Клиент</th><th>Сумма</th><th>Комментарий</th><th>Действия</th></tr>
+{% for p in reqs %}{% if p.method == 'cash' %}
+<tr><td>{{ p.id }}</td><td>{{ p.user_id }}</td><td>{{ (p.amount_minor/100) | round(2) }} ₽</td><td>{{ p.comment or '' }}</td>
+<td>
+<form style="display:inline" method="post" action="/lk/kassa/{{ p.id }}/approve"><button class="btn" type="submit">Зачислить</button></form>
+<form style="display:inline" method="post" action="/lk/kassa/{{ p.id }}/reject"><button class="btn danger" type="submit">Отклонить</button></form>
+</td></tr>{% endif %}{% endfor %}</table>
+{% else %}<p class="muted">Заявок на наличные сейчас нет.</p>{% endif %}
+</div>
+{% endblock %}

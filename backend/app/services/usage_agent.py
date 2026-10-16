@@ -12,6 +12,7 @@ from app.models import VpnAccount, VpnNode
 from app.services import usage
 
 log = logging.getLogger(__name__)
+_NODE_FAILS: dict = {}
 
 
 async def _poll_node(node: VpnNode) -> None:
@@ -52,6 +53,12 @@ async def _poll_node(node: VpnNode) -> None:
     except Exception:
         db.rollback()
         log.exception("usage agent: node %s failed", node.code)
+        _NODE_FAILS[node.code] = _NODE_FAILS.get(node.code, 0) + 1
+        if _NODE_FAILS[node.code] == 3:
+            from app.core.notifications import notify_admin
+            notify_admin(db, f"🚨 Нода {node.code} не отвечает 3 опроса подряд", kind="error")
+    else:
+        _NODE_FAILS[node.code] = 0
     finally:
         db.close()
 

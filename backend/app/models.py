@@ -25,6 +25,8 @@ class User(Base):
         CheckConstraint("role in ('client','admin','manager','master')", name="users_role_ck"),
         CheckConstraint("status in ('active','blocked')", name="users_status_ck"),
     )
+    referral_code: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    referred_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class Wallet(Base):
@@ -33,6 +35,7 @@ class Wallet(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="RUB")
     balance_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    auto_approved_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     promise_limit_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     user = relationship("User")
@@ -286,3 +289,24 @@ class CouponActivation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
 
     __table_args__ = (UniqueConstraint("coupon_id", "user_id", name="uq_coupon_user"),)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, default="info")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actor_email: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    action: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())

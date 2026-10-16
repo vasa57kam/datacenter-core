@@ -5,6 +5,7 @@ from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import select
 from starlette.requests import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from app.core.ratelimit import RateLimitMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response as StarletteResponse
 from starlette.responses import RedirectResponse
@@ -376,6 +377,8 @@ class CouponAdmin(ModelView, model=Coupon):
 
 
 def setup_admin(app, secret_key: str = ""):
+    if not any(getattr(m, "cls", None) is RateLimitMiddleware for m in app.user_middleware):
+        app.add_middleware(RateLimitMiddleware)
     if not any(getattr(m, "cls", None) is AdminQuickLinksMiddleware for m in app.user_middleware):
         app.add_middleware(AdminQuickLinksMiddleware)
     if not any(getattr(m, "cls", None) is SessionMiddleware for m in app.user_middleware):
