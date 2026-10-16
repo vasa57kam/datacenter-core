@@ -597,13 +597,19 @@ def ops_user_create(request: Request, email: str = Form(), role: str = Form("cli
     if "@" not in email or len(new_password) < 8:
         return RedirectResponse("/admin-ops/users/new", status_code=303)
     exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-    if exists is None:
-        db.add(User(email=email, role=role if role in ("client", "admin", "cashier") else "client",
-                    status=status if status in ("active", "blocked") else "active",
-                    password_hash=_security.hash_password(new_password)))
+    if exists is not None:
+        return RedirectResponse("/admin-ops/users?error=2", status_code=303)
+    try:
+        u = User(email=email, role=role if role in ("client", "admin", "cashier") else "client",
+                 status=status if status in ("active", "blocked") else "active",
+                 password_hash=_security.hash_password(new_password))
+        db.add(u)
+        db.flush()
+        _ledger.get_wallet(db, u.id)
         db.commit()
-    else:
-        pass  # Email already exists, silently redirect
+    except Exception:
+        db.rollback()
+        return RedirectResponse("/admin-ops/users?error=1", status_code=303)
     return RedirectResponse("/admin-ops/users", status_code=303)
 
 

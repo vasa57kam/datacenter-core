@@ -221,6 +221,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     user = _current_user(db, request)
     if user is None:
         return RedirectResponse("/lk/login", status_code=303)
+    if user.role == "cashier":
+        return RedirectResponse("/lk/kassa", status_code=303)
     wallet = ledger.get_wallet(db, user.id)
     entries = db.execute(
         select(LedgerEntry)

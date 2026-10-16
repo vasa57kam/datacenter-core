@@ -2,8 +2,16 @@
 {% block title %}Касса{% endblock %}
 {% block content %}
 <div class="card">
-<h3>💰 Касса: наличные пополнения</h3>
-<p class="muted">Принял наличные → проверь заявку → «Зачислить». Доступно роли кассир и администратор.</p>
+<h3>💰 Приём наличных</h3>
+<p class="muted">Клиент передал наличные → введи его email и сумму → деньги упадут на баланс сразу.</p>
+<form method="post" action="/lk/kassa/intake" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+  <label>Email клиента<input name="email" required placeholder="client@mail.ru"></label>
+  <label>Сумма, ₽<input name="amount" value="100" inputmode="decimal"></label>
+  <div><button class="btn" type="submit">Принять и зачислить</button></div>
+</form>
+</div>
+<div class="card">
+<h3>Заявки на наличные (ожидают)</h3>
 {% if reqs %}
 <table><tr><th>№</th><th>Клиент</th><th>Сумма</th><th>Комментарий</th><th>Действия</th></tr>
 {% for p in reqs %}{% if p.method == 'cash' %}
@@ -13,5 +21,6 @@
 <form style="display:inline" method="post" action="/lk/kassa/{{ p.id }}/reject"><button class="btn danger" type="submit">Отклонить</button></form>
 </td></tr>{% endif %}{% endfor %}</table>
 {% else %}<p class="muted">Заявок на наличные сейчас нет.</p>{% endif %}
+<p class="muted" style="margin-top:10px">📒 <a href="/admin-ops/cashier-guide">Инструкция кассира</a> (откроется в пульте, доступ только у админа)</p>
 </div>
 {% endblock %}
