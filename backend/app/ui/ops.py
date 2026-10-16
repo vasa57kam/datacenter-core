@@ -17,9 +17,16 @@ templates = Jinja2Templates(directory="app/ui/templates")
 
 
 def _guard(request: Request):
-    if not request.session.get("admin_uid"):
-        return RedirectResponse("/admin/login", status_code=303)
-    return None
+    import time as _t
+    exp = request.session.get("exp")
+    if exp and _t.time() > int(exp):
+        request.session.clear()
+    role = request.session.get("staff_role")
+    if role == "admin" or request.session.get("admin_uid"):
+        return None
+    if role == "cashier":
+        return RedirectResponse("/lk/kassa", status_code=303)
+    return RedirectResponse("/admin-ops/staff-login", status_code=303)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -591,7 +598,7 @@ def ops_user_create(request: Request, email: str = Form(), role: str = Form("cli
         return RedirectResponse("/admin-ops/users/new", status_code=303)
     exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if exists is None:
-        db.add(User(email=email, role=role if role in ("client", "admin") else "client",
+        db.add(User(email=email, role=role if role in ("client", "admin", "cashier") else "client",
                     status=status if status in ("active", "blocked") else "active",
                     password_hash=_security.hash_password(new_password)))
         db.commit()
@@ -617,7 +624,7 @@ def ops_user_save(uid: int, request: Request, email: str = Form(), role: str = F
     u = db.get(User, uid)
     if u is not None:
         u.email = (email or u.email).strip().lower()
-        u.role = role if role in ("client", "admin") else u.role
+        u.role = role if role in ("client", "admin", "cashier") else u.role
         u.status = status if status in ("active", "blocked") else u.status
         if new_password and len(new_password) >= 8:
             u.password_hash = _security.hash_password(new_password)
@@ -1026,3 +1033,39 @@ def ops_user_suspend_all(uid: int, request: Request, db: Session = Depends(get_d
     _audit(db, request, "suspend_all", f"user={uid} count={len(services)}")
     db.commit()
     return RedirectResponse("/admin-ops/services", status_code=303)
+
+
+# ================= Служебный вход (админ / кассир) =================
+
+@router.get("/staff-login", response_class=HTMLResponse)
+def staff_login_page(request: Request):
+    role = request.session.get("staff_role")
+    if role == "admin" or request.session.get("admin_uid"):
+        return RedirectResponse("/admin-ops/", status_code=303)
+    if role == "cashier":
+        return RedirectResponse("/lk/kassa", status_code=303)
+    return templates.TemplateResponse(request, "ops/login.html", {"error": None})
+
+
+@router.post("/staff-login")
+def staff_login(request: Request, email: str = Form(), password: str = Form(), db: Session = Depends(get_db)):
+    import time as _time
+    from app.core import security as _sec
+    u = db.execute(
+        select(User).where(User.email == (email or "").strip().lower(), User.status == "active")
+    ).scalar_one_or_none()
+    if u is None or u.role not in ("admin", "cashier") or not _sec.verify_password(password or "", u.password_hash):
+        return templates.TemplateResponse(request, "ops/login.html",
+                                          {"error": "Неверные данные или нет служебного доступа"}, status_code=401)
+    request.session["uid"] = u.id
+    request.session["staff_role"] = u.role
+    if u.role == "admin":
+        request.session["admin_uid"] = u.id
+    request.session["exp"] = int(_time.time()) + 12 * 3600
+    return RedirectResponse("/admin-ops/" if u.role == "admin" else "/lk/kassa", status_code=303)
+
+
+@router.post("/staff-logout")
+def staff_logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/admin-ops/staff-login", status_code=303)

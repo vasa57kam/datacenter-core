@@ -6,7 +6,7 @@
 <form method="post">
   <label>Email</label><input name="email" value="{{ u.email if u else '' }}" required>
   <label>Роль</label>
-  <select name="role"><option value="client" {% if u and u.role == 'client' %}selected{% endif %}>Клиент</option><option value="admin" {% if u and u.role == 'admin' %}selected{% endif %}>Админ</option></select>
+  <select name="role"><option value="client" {% if u and u.role == 'client' %}selected{% endif %}>Клиент</option><option value="admin" {% if u and u.role == 'admin' %}selected{% endif %}>Админ</option><option value="cashier" {% if u and u.role == 'cashier' %}selected{% endif %}>Кассир</option></select>
   <label>Статус</label>
   <select name="status"><option value="active" {% if not u or u.status == 'active' %}selected{% endif %}>Активен</option><option value="blocked" {% if u and u.status == 'blocked' %}selected{% endif %}>Заблокирован</option></select>
   <label>Новый пароль (оставь пустым, чтобы не менять)</label><input name="new_password" type="password" placeholder="Минимум 8 символов">
