@@ -1,0 +1,37 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Состояние{% endblock %}
+{% block content %}
+<div class="card">
+<h1>🔧 Состояние системы</h1>
+{% if sync_ok %}
+<p><span class="pill ok">✅ Сервер синхронизирован с git</span></p>
+{% else %}
+<p><span class="pill bad">⏳ Сервер отстаёт от git — автосинхронизация догонит в течение минуты</span></p>
+{% endif %}
+<div class="grid cols">
+  <div class="stat"><b>v{{ repo_version }}</b>версия в коде</div>
+  <div class="stat"><b>v{{ db_version }}</b>версия в БД</div>
+  <div class="stat"><b>{{ deployed }}</b>коммит на сервере</div>
+  <div class="stat"><b>{{ origin }}</b>коммит в git (origin)</div>
+</div>
+<p class="note">Коммит в БД: {{ db_commit }} · применено патчеров: {{ patches_applied }}</p>
+
+<h3 style="margin-top:18px">Последние коммиты</h3>
+<table><tr><th>Когда</th><th>Хэш</th><th>Сообщение</th></tr>
+{% for c in commits %}<tr><td>{{ c.date }}</td><td><code>{{ c.hash }}</code></td><td>{{ c.msg }}</td></tr>{% endfor %}
+</table>
+{% if not commits %}<p class="note">git-лог недоступен в контейнере — смотри коммиты на сервере.</p>{% endif %}
+
+<h3 style="margin-top:18px">История патчей</h3>
+<table><tr><th>Когда</th><th>Версия</th><th>Кто</th><th>Описание</th></tr>
+{% for p in history %}<tr><td>{{ p.applied_at.strftime('%d.%m %H:%M') }}</td><td>{{ p.version }}</td><td>{{ p.actor_email or 'система' }}</td><td>{{ p.summary }}</td></tr>{% endfor %}
+</table>
+{% if not history %}<p class="note">История пуста.</p>{% endif %}
+
+<p style="margin-top:14px">
+<form method="post" action="/admin-ops/status/rebuild" style="display:inline"><button class="btn warn" type="submit">🔁 Принудительная пересборка</button></form>
+<a class="btn sec" href="/admin-ops/apply-patch">📋 Команды в контейнере</a>
+</p>
+<p class="note">Как это работает: патч пушится в git → cron на сервере раз в минуту сверяет коммиты → сам делает pull, пересборку (--no-cache), миграции и пишет версию в БД. Вмешательство не нужно.</p>
+</div>
+{% endblock %}
