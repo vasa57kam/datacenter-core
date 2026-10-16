@@ -582,10 +582,11 @@ from app.core import security as _security
 
 
 @router.get("/users/new", response_class=HTMLResponse)
-def ops_user_new_page(request: Request):
+def ops_user_new_page(request: Request, error: str = ""):
     r = _guard(request)
     if r: return r
-    return templates.TemplateResponse(request, "ops/user_edit.html", {"u": None})
+    errs = {"3": "Пароль короче 8 символов", "4": "Некорректный email"}
+    return templates.TemplateResponse(request, "ops/user_edit.html", {"u": None, "error": errs.get(error, "")})
 
 
 @router.post("/users/new")
@@ -594,8 +595,10 @@ def ops_user_create(request: Request, email: str = Form(), role: str = Form("cli
     r = _guard(request)
     if r: return r
     email = (email or "").strip().lower()
-    if "@" not in email or len(new_password) < 8:
-        return RedirectResponse("/admin-ops/users/new", status_code=303)
+    if "@" not in email:
+        return RedirectResponse("/admin-ops/users/new?error=4", status_code=303)
+    if len(new_password or "") < 8:
+        return RedirectResponse("/admin-ops/users/new?error=3", status_code=303)
     exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if exists is not None:
         return RedirectResponse("/admin-ops/users?error=2", status_code=303)
@@ -606,11 +609,12 @@ def ops_user_create(request: Request, email: str = Form(), role: str = Form("cli
         db.add(u)
         db.flush()
         _ledger.get_wallet(db, u.id)
+        _audit(db, request, "user_create", email)
         db.commit()
     except Exception:
         db.rollback()
         return RedirectResponse("/admin-ops/users?error=1", status_code=303)
-    return RedirectResponse("/admin-ops/users", status_code=303)
+    return RedirectResponse("/admin-ops/users?ok=1", status_code=303)
 
 
 @router.get("/users/{uid}", response_class=HTMLResponse)

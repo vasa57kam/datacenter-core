@@ -3,6 +3,7 @@
 {% block content %}
 <div class="card" style="max-width:560px">
 <h1>{{ 'Новый пользователь' if not u else 'Пользователь: ' + u.email }}</h1>
+{% if error %}<p class="note" style="color:#f85149">{{ error }}</p>{% endif %}
 <form method="post">
   <label>Email</label><input name="email" value="{{ u.email if u else '' }}" required>
   <label>Роль</label>
