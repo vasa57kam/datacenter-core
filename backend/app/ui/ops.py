@@ -974,30 +974,38 @@ def ops_stats(request: Request, db: Session = Depends(get_db)):
     r = _guard(request)
     if r: return r
     from datetime import timedelta
-    from app.core.tz import now as _now
-    days = []
-    total = 0
-    for i in range(13, -1, -1):
-        d0 = (_now() - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
-        d1 = d0 + timedelta(days=1)
-        summ = db.execute(
-            select(func.coalesce(func.sum(_LedgerEntry.amount_minor), 0)).where(
-                _LedgerEntry.entry_type == "debit",
-                _LedgerEntry.created_at >= d0, _LedgerEntry.created_at < d1)
-        ).scalar() or 0
-        rub = round(abs(summ) / 100, 2)
-        total += rub
-        days.append({"label": d0.strftime("%d.%m"), "rub": rub, "raw": rub})
-    mx = max([d["raw"] for d in days] + [1])
-    for d in days:
-        d["h"] = int(4 + 150 * d["raw"] / mx)
-    kpi = {
-        "clients": db.execute(select(func.count(User.id)).where(User.role == "client")).scalar() or 0,
-        "active_services": db.execute(select(func.count(_Service.id)).where(_Service.status == "active")).scalar() or 0,
-        "revenue_total": round(total, 2),
-        "pending": db.execute(select(func.count(_PayReq.id)).where(_PayReq.status == "pending")).scalar() or 0,
-    }
-    return templates.TemplateResponse(request, "ops/stats.html", {"chart": days, "kpi": kpi})
+    from app.core.tz import as_msk, now as _now
+    try:
+        now = _now()
+        day0 = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=13)
+        entries = db.execute(
+            select(_LedgerEntry).where(_LedgerEntry.entry_type == "debit", _LedgerEntry.created_at >= day0)
+            .order_by(_LedgerEntry.id.desc()).limit(20000)
+        ).scalars().all()
+        sums = {}
+        for e in entries:
+            d = as_msk(e.created_at).replace(hour=0, minute=0, second=0, microsecond=0)
+            sums[d] = sums.get(d, 0) + abs(e.amount_minor or 0)
+        chart, total = [], 0.0
+        for i in range(14):
+            d = day0 + timedelta(days=i)
+            rub = round(sums.get(d, 0) / 100, 2)
+            total += rub
+            chart.append({"label": d.strftime("%d.%m"), "rub": rub, "raw": rub})
+        mx = max([c["raw"] for c in chart] + [1])
+        for c in chart:
+            c["h"] = int(4 + 150 * c["raw"] / mx)
+        kpi = {
+            "clients": db.execute(select(func.count(User.id)).where(User.role == "client")).scalar() or 0,
+            "active_services": db.execute(select(func.count(_Service.id)).where(_Service.status == "active")).scalar() or 0,
+            "revenue_total": round(total, 2),
+            "pending": db.execute(select(func.count(_PayReq.id)).where(_PayReq.status == "pending")).scalar() or 0,
+        }
+        return templates.TemplateResponse(request, "ops/stats.html", {"chart": chart, "kpi": kpi})
+    except Exception:
+        import traceback
+        return HTMLResponse("<h3>Диагностика stats</h3><pre style='white-space:pre-wrap'>"
+                            + traceback.format_exc() + "</pre>")
 
 
 @router.get("/ledger/export.csv")
