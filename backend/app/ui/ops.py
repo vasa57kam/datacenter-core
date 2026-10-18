@@ -303,6 +303,16 @@ from app.services import ledger as _ledger
 from app.services.provisioning import enqueue_task as _enqueue
 
 
+def _gset(db, key: str, default: str = "") -> str:
+    from app.core.settings_svc import get_setting
+    return get_setting(db, key, default)
+
+
+def _sset(db, key: str, value: str) -> None:
+    from app.core.settings_svc import set_setting
+    set_setting(db, key, value)
+
+
 def _rub(m) -> str:
     return f"{(m or 0) / 100:.2f} ₽"
 

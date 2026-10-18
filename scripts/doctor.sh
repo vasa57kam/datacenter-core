@@ -44,7 +44,15 @@ for i in $(seq 1 30); do
   [ "$code" = "200" ] && break
   sleep 2
 done
-[ "$code" = "200" ] || fail "API не поднялся. Диагноз: docker compose logs api --tail=40"
+if [ "$code" != "200" ]; then
+  echo
+  echo "❌ API не поднялся. Последние логи api:"
+  docker compose logs api --tail=25 | tail -25
+  echo
+  echo "Логи worker:"
+  docker compose logs worker --tail=10 | tail -10
+  exit 1
+fi
 
 say "5/8 Миграции БД"
 bash scripts/db_migrate.sh >>"$LOG" 2>&1 || fail "Ошибка миграций: tail -20 $LOG"
