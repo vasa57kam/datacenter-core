@@ -884,7 +884,9 @@ def ops_users(request: Request, page: int = 1, email: str = "", status: str = ""
                          "url": f"/admin-ops/users/{u.id}/toggle", "method": "POST",
                          "cls": "warn" if u.status == "active" else ""})
         acts.append({"label": "Изменить", "url": f"/admin-ops/users/{u.id}", "method": "GET"})
-        rows.append({"cells": [u.id, u.email, u.role, u.status, _dt(u.created_at)], "actions": acts})
+        if u.role != "admin":
+            acts.append({"label": "Удалить", "url": f"/admin-ops/users/{u.id}/delete", "method": "POST", "cls": "danger", "confirm": "Удалить пользователя со всеми услугами и кошельком? Безвозвратно."})
+        rows.append({"cells": [u.id, u.email, u.role, {"active": "активен", "blocked": "заблокирован", "pending_verify": "на проверке"}.get(u.status, u.status), _dt(u.created_at)], "actions": acts})
     query = "&".join(f"{k}={v}" for k, v in [("email", email), ("status", status)] if v)
     p["query"] = query
     return templates.TemplateResponse(request, "ops/table.html", {
@@ -1087,3 +1089,90 @@ def staff_login(request: Request, email: str = Form(), password: str = Form(), d
 def staff_logout(request: Request):
     request.session.clear()
     return RedirectResponse("/admin-ops/staff-login", status_code=303)
+
+
+# ================= v99: верификация, удаление, регламент =================
+@router.get("/verify", response_class=HTMLResponse)
+def ops_verify(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    users = db.execute(select(User).where(User.status == "pending_verify").order_by(User.id)).scalars().all()
+    rows = []
+    for u in users:
+        rows.append({"cells": [u.id, u.email, u.phone or "—", u.register_ip or "—", _dt(u.created_at)],
+                     "actions": [
+                         {"label": "Доверить и активировать", "url": f"/admin-ops/verify/{u.id}/ok", "method": "POST"},
+                         {"label": "Заблокировать", "url": f"/admin-ops/verify/{u.id}/block", "method": "POST", "cls": "danger"},
+                     ]})
+    return templates.TemplateResponse(request, "ops/table.html", {
+        "title": "🕵 Верификация: ожидают подтверждения", "columns": ["№", "Email", "Телефон", "IP", "Регистрация"],
+        "rows": rows, "note": "Позвони или напиши клиенту, убедись, что человек реальный, и нажми «Доверить»."})
+
+
+@router.post("/verify/{uid}/ok")
+def ops_verify_ok(uid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    u = db.get(User, uid)
+    if u is not None and u.status == "pending_verify":
+        u.status = "active"
+        _audit(db, request, "verify_ok", u.email)
+        from app.core.notifications import notify_admin
+        notify_admin(db, f"✅ Аккаунт {u.email} верифицирован и активирован")
+        db.commit()
+    return RedirectResponse("/admin-ops/verify", status_code=303)
+
+
+@router.post("/verify/{uid}/block")
+def ops_verify_block(uid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    u = db.get(User, uid)
+    if u is not None and u.status == "pending_verify":
+        u.status = "blocked"
+        _audit(db, request, "verify_block", u.email)
+        db.commit()
+    return RedirectResponse("/admin-ops/verify", status_code=303)
+
+
+@router.post("/users/{uid}/delete")
+def ops_user_delete(uid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    u = db.get(User, uid)
+    if u is None or u.role == "admin":
+        return RedirectResponse("/admin-ops/users", status_code=303)
+    try:
+        services = db.execute(select(_Service).where(_Service.user_id == uid)).scalars().all()
+        for sv in services:
+            if sv.status in ("active", "suspended"):
+                sv.status = "terminated"
+                _enqueue(db, "service_instance", sv.id, "delete")
+        db.flush()
+        for sv in services:
+            for a in db.execute(select(_Account).where(_Account.service_instance_id == sv.id)).scalars().all():
+                db.delete(a)
+            for x in db.execute(select(_Session).where(_Session.service_instance_id == sv.id)).scalars().all():
+                db.delete(x)
+            db.delete(sv)
+        wallet = db.execute(select(_Wallet).where(_Wallet.user_id == uid)).scalar_one_or_none()
+        if wallet is not None:
+            for e in db.execute(select(_LedgerEntry).where(_LedgerEntry.wallet_id == wallet.id)).scalars().all():
+                db.delete(e)
+            db.delete(wallet)
+        for pr in db.execute(select(_PayReq).where(_PayReq.user_id == uid)).scalars().all():
+            db.delete(pr)
+        db.delete(u)
+        _audit(db, request, "user_delete", f"user={uid}")
+        db.commit()
+    except Exception:
+        db.rollback()
+        return RedirectResponse("/admin-ops/users?error=9", status_code=303)
+    return RedirectResponse("/admin-ops/users?ok=2", status_code=303)
+
+
+@router.get("/rules", response_class=HTMLResponse)
+def ops_rules(request: Request):
+    r = _guard(request)
+    if r: return r
+    return templates.TemplateResponse(request, "ops/rules.html", {})

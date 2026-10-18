@@ -114,7 +114,7 @@ def _current_user(db: Session, request: Request):
     if not uid:
         return None
     user = db.get(User, int(uid))
-    if user is None or user.status != "active":  # заблокированного выкидываем сразу
+    if user is None or user.status not in ("active", "pending_verify"):  # заблокированного выкидываем сразу
         request.session.clear()
         return None
     return user
@@ -131,9 +131,33 @@ def landing(request: Request, db: Session = Depends(get_db)):
     )
 
 
+def _ip_risk(db, ip: str) -> bool:
+    """Подозрительный IP: много регистраций за сутки / были блокировки / автоподтверждение уже использовали."""
+    if not ip:
+        return False
+    from app.core.tz import now as _now
+    day0 = _now().replace(hour=0, minute=0, second=0, microsecond=0)
+    cnt = len(db.execute(select(User).where(User.register_ip == ip, User.created_at >= day0)).scalars().all())
+    if cnt >= 3:
+        return True
+    bad = db.execute(select(User).where(User.register_ip == ip, User.status == "blocked")).scalars().first()
+    if bad is not None:
+        return True
+    used = db.execute(select(User).where(User.register_ip == ip, User.auto_used.is_(True))).scalars().first()
+    return used is not None
+
+
 @router.get("/register", response_class=HTMLResponse)
-def register_page(request: Request):
-    return templates.TemplateResponse(request, "lk/register.html", {"error": None, "ref": request.query_params.get("ref", "")})
+def register_page(request: Request, error: str = "", db: Session = Depends(get_db)):
+    import random
+    a, b = random.randint(2, 9), random.randint(2, 9)
+    request.session["captcha"] = a + b
+    ip = request.client.host if request.client else ""
+    risk = _ip_risk(db, ip)
+    request.session["reg_risk"] = "1" if risk else ""
+    return templates.TemplateResponse(request, "lk/register.html",
+                                      {"error": error, "ref": request.query_params.get("ref", ""),
+                                       "captcha_q": f"{a} + {b}", "risk": risk})
 
 
 @router.post("/register")
@@ -142,36 +166,49 @@ def register(
     email: str = Form(),
     password: str = Form(min_length=8),
     ref: str = Form(""),
+    captcha: str = Form(""),
+    phone: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    ip = request.client.host if request.client else ""
+    want = request.session.get("captcha")
+    request.session.pop("captcha", None)
+    risk = request.session.pop("reg_risk", "") == "1" or _ip_risk(db, ip)
+    try:
+        got = int((captcha or "").strip())
+    except ValueError:
+        got = None
+    if want is None or got != want:
+        return RedirectResponse("/lk/register?error=5", status_code=303)
     email = security.normalize_email(email)
     if "@" not in email or len(email) > 254:
-        return templates.TemplateResponse(
-            request, "lk/register.html", {"error": "Укажите корректный email"}, status_code=400,
-        )
+        return RedirectResponse("/lk/register?error=1", status_code=303)
+    if risk:
+        digits = "".join(ch for ch in phone if ch.isdigit())
+        if len(digits) < 10:
+            return RedirectResponse("/lk/register?error=8", status_code=303)
     exists = db.execute(select(User).where(func.lower(User.email) == email)).scalar_one_or_none()
-    taken = exists is not None
-    if not taken:
-        import uuid as _uuid
-        referred = None
-        if ref.strip():
-            referred = db.execute(select(User).where(User.referral_code == ref.strip())).scalar_one_or_none()
-            referred = referred.id if referred is not None else None
-        user = User(email=email, password_hash=security.hash_password(password),
-                    referral_code=_uuid.uuid4().hex[:10], referred_by=referred)
-        db.add(user)
-        try:
-            db.flush()
-            ledger.get_wallet(db, user.id)
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            taken = True
-    if taken:
-        return templates.TemplateResponse(
-            request, "lk/register.html",
-            {"error": "Email уже зарегистрирован"}, status_code=409,
-        )
+    if exists is not None:
+        return RedirectResponse("/lk/register?error=2", status_code=303)
+    import uuid as _uuid
+    referred = None
+    if ref.strip():
+        rrow = db.execute(select(User).where(User.referral_code == ref.strip())).scalar_one_or_none()
+        referred = rrow.id if rrow is not None else None
+    status = "pending_verify" if risk else "active"
+    user = User(email=email, password_hash=security.hash_password(password),
+                referral_code=_uuid.uuid4().hex[:10], referred_by=referred,
+                register_ip=ip or None, phone=phone.strip() or None, status=status)
+    db.add(user)
+    try:
+        db.flush()
+        ledger.get_wallet(db, user.id)
+        if risk:
+            notify_admin(db, f"🕵 Регистрация на проверку: {email}, телефон {phone.strip() or 'не указан'}, IP {ip}")
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse("/lk/register?error=2", status_code=303)
     return RedirectResponse("/lk/login", status_code=303)
 
 
@@ -241,6 +278,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     ).scalars().all()
     return templates.TemplateResponse(request, "lk/dashboard.html", {
         "user": user, "wallet": wallet, "entries": entries,
+        "pending_verify": user.status == "pending_verify",
         "services": services, "payreqs": payreqs,
         "methods": TOPUP_METHODS, "notes": TOPUP_NOTES,
     })
@@ -321,6 +359,8 @@ def order_create(
     user = _current_user(db, request)
     if user is None:
         raise HTTPException(status_code=401)
+    if user.status != "active":
+        return RedirectResponse("/lk/", status_code=303)
     product = db.get(Product, product_id)
     if product is None or not product.active:
         raise HTTPException(status_code=404, detail="Product not found")

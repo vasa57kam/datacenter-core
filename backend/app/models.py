@@ -27,6 +27,9 @@ class User(Base):
     )
     referral_code: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
     referred_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    register_ip: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    auto_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Wallet(Base):

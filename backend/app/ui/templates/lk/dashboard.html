@@ -1,6 +1,12 @@
 {% extends "lk/base.html" %}
 {% block title %}Кабинет{% endblock %}
 {% block content %}
+{% if pending_verify %}
+<div class="card" style="border:1px solid #d29922">
+<h3>⏳ Аккаунт на проверке</h3>
+<p class="muted">Мы свяжемся с тобой в ближайшее время для подтверждения. Пополнение баланса уже работает; подключение услуг откроется после активации.</p>
+</div>
+{% endif %}
 <div class="grid cols-2">
   <div class="card"><h3>Баланс</h3>
     <div class="balance">{{ (wallet.balance_minor / 100) | round(2) }} ₽</div>

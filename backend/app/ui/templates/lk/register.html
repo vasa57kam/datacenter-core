@@ -1,15 +1,21 @@
 {% extends "lk/base.html" %}
 {% block title %}Регистрация{% endblock %}
 {% block content %}
-<div style="max-width:420px;margin:40px auto"><div class="card">
+<div style="max-width:440px;margin:40px auto"><div class="card">
 <h3>Создать кабинет</h3>
-{% if error %}<p><span class="pill bad">{{ error }}</span></p>{% endif %}
+{% set errs = {'1': 'Некорректный email', '2': 'Email уже зарегистрирован', '5': 'Неверный ответ на пример — попробуй ещё раз', '8': 'Укажи номер телефона полностью — мы свяжемся для подтверждения'} %}
+{% if error %}<p><span class="pill bad">{{ errs.get(error, 'Ошибка регистрации') }}</span></p>{% endif %}
+{% if risk %}
+<p><span class="pill pause">С твоего IP много регистраций — попросим телефон для подтверждения. Это не блокировка: после звонка админа аккаунт активируется.</span></p>
+{% endif %}
 <form method="post">
 <label>Email</label><input name="email" type="email" required placeholder="you@example.com">
 <label>Пароль</label><input name="password" type="password" minlength="8" required placeholder="Минимум 8 символов">
+{% if risk %}<label>Номер телефона (для подтверждения)</label><input name="phone" type="tel" required placeholder="+7 900 000-00-00">{% endif %}
+<label>Антиспам: сколько будет {{ captcha_q }} ?</label><input name="captcha" inputmode="numeric" required placeholder="Ответ числом">
 <input type="hidden" name="ref" value="{{ ref or '' }}">
 <button class="btn" type="submit" style="width:100%">Зарегистрироваться</button>
 </form>
-<p class="muted" style="text-align:center">Уже есть кабинет? <a href="/lk/login">Вход</a><br>Приглашение друга: поделись ссылкой /lk/register?ref=ТВОЙ_КОД — друг получит мгновенное первое пополнение, ты 50 ₽ бонусом.</p>
+<p class="muted" style="text-align:center">Уже есть кабинет? <a href="/lk/login">Вход</a></p>
 </div></div>
 {% endblock %}
