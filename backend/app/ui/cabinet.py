@@ -578,7 +578,7 @@ def coupon_activate(request: Request, code: str = Form(), db: Session = Depends(
 # ================= Касса (роль cashier и admin) =================
 
 @router.get("/kassa", response_class=HTMLResponse)
-def kassa_page(request: Request, db: Session = Depends(get_db)):
+def kassa_page(request: Request, error: str = "", ok: str = "", db: Session = Depends(get_db)):
     user = _current_user(db, request)
     if user is None or user.role not in ("cashier", "admin"):
         raise HTTPException(status_code=403)
@@ -586,7 +586,46 @@ def kassa_page(request: Request, db: Session = Depends(get_db)):
         select(PaymentRequest).where(PaymentRequest.status == "pending")
         .order_by(PaymentRequest.id.desc())
     ).scalars().all()
-    return templates.TemplateResponse(request, "lk/kassa.html", {"user": user, "reqs": reqs})
+    clients = db.execute(
+        select(User).where(User.role == "client", User.status == "active")
+        .order_by(User.email)
+    ).scalars().all()
+    return templates.TemplateResponse(request, "lk/kassa.html", {
+        "user": user, "reqs": reqs, "clients": clients, "error": error, "ok": ok})
+
+
+@router.post("/kassa/intake")
+def kassa_intake(request: Request, user_id: int = Form(0), email: str = Form(""),
+                 amount: str = Form(""), db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None or user.role not in ("cashier", "admin"):
+        raise HTTPException(status_code=403)
+    from app.services.payments import approve_payreq
+    client = db.get(User, user_id) if user_id else None
+    if client is None and email.strip():
+        client = db.execute(
+            select(User).where(User.email == security.normalize_email(email))
+        ).scalar_one_or_none()
+    if client is None:
+        return RedirectResponse("/lk/kassa?error=1", status_code=303)
+    amount_minor = parse_rub(amount)
+    if amount_minor <= 0:
+        return RedirectResponse("/lk/kassa?error=2", status_code=303)
+    pr = PaymentRequest(user_id=client.id, amount_minor=amount_minor, method="cash",
+                        comment="принято в кассе", status="pending")
+    db.add(pr)
+    db.flush()
+    approve_payreq(db, pr, actor_email=f"касса: {user.email}")
+    db.commit()
+    return RedirectResponse(f"/lk/kassa?ok={amount_minor / 100:.2f}", status_code=303)
+
+
+@router.get("/kassa/guide", response_class=HTMLResponse)
+def kassa_guide(request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None or user.role not in ("cashier", "admin"):
+        raise HTTPException(status_code=403)
+    return templates.TemplateResponse(request, "lk/kassa_guide.html", {"user": user})
 
 
 @router.post("/kassa/{pid}/approve")
@@ -596,7 +635,8 @@ def kassa_approve(pid: int, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403)
     pr = db.get(PaymentRequest, pid)
     if pr is not None and pr.status == "pending" and pr.method == "cash":
-        approve_payreq(db, pr, actor_email=user.email)
+        from app.services.payments import approve_payreq
+        approve_payreq(db, pr, actor_email=f"касса: {user.email}")
         db.commit()
     return RedirectResponse("/lk/kassa", status_code=303)
 

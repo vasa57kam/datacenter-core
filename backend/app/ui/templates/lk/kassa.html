@@ -3,12 +3,21 @@
 {% block content %}
 <div class="card">
 <h3>💰 Приём наличных</h3>
-<p class="muted">Клиент передал наличные → введи его email и сумму → деньги упадут на баланс сразу.</p>
-<form method="post" action="/lk/kassa/intake" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
-  <label>Email клиента<input name="email" required placeholder="client@mail.ru"></label>
+{% if ok %}<p><span class="pill ok">✅ Зачислено {{ ok }} ₽</span></p>{% endif %}
+{% if error == '1' %}<p><span class="pill bad">Клиент не найден — выбери из списка или проверь email</span></p>{% endif %}
+{% if error == '2' %}<p><span class="pill bad">Некорректная сумма</span></p>{% endif %}
+<form method="post" action="/lk/kassa/intake" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+  <label>Клиент из списка
+    <select name="user_id">
+      <option value="0">— выбери клиента —</option>
+      {% for c in clients %}<option value="{{ c.id }}">{{ c.email }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>или email вручную<input name="email" placeholder="если клиента нет в списке"></label>
   <label>Сумма, ₽<input name="amount" value="100" inputmode="decimal"></label>
   <div><button class="btn" type="submit">Принять и зачислить</button></div>
 </form>
+<p class="muted">Деньги падают на баланс сразу, заявка помечается «зачислено». 📒 <a href="/lk/kassa/guide">Инструкция кассира</a></p>
 </div>
 <div class="card">
 <h3>Заявки на наличные (ожидают)</h3>
@@ -21,6 +30,5 @@
 <form style="display:inline" method="post" action="/lk/kassa/{{ p.id }}/reject"><button class="btn danger" type="submit">Отклонить</button></form>
 </td></tr>{% endif %}{% endfor %}</table>
 {% else %}<p class="muted">Заявок на наличные сейчас нет.</p>{% endif %}
-<p class="muted" style="margin-top:10px">📒 <a href="/admin-ops/cashier-guide">Инструкция кассира</a> (откроется в пульте, доступ только у админа)</p>
 </div>
 {% endblock %}
