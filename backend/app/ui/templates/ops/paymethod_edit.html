@@ -1,0 +1,15 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Способ оплаты{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px">
+<h1>{{ 'Новый способ оплаты' if not m else 'Способ: ' + m.title }}</h1>
+<form method="post">
+  {% if not m %}<label>Код (латиницей)</label><input name="code" placeholder="sbp" required>{% endif %}
+  <label>Название (видит клиент)</label><input name="title" value="{{ m.title if m else '' }}">
+  <label>Инструкция для клиента</label><textarea name="instructions" style="min-height:110px">{{ m.instructions if m else '' }}</textarea>
+  <label>Порядок</label><input name="sort_order" type="number" value="{{ m.sort_order if m else 0 }}">
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="client_visible" style="width:auto" {% if not m or m.client_visible %}checked{% endif %}> Показывать клиентам (снять — только касса/админ)</label>
+  <button class="btn" type="submit">Сохранить</button> <a class="btn sec" href="/admin-ops/paymethods">Отмена</a>
+</form>
+</div>
+{% endblock %}

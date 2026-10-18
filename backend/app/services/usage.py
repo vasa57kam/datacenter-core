@@ -84,6 +84,11 @@ def _suspend(db, service: ServiceInstance, session: UsageSession) -> None:
 
 
 def charge_active_sessions() -> None:
+    try:
+        from app.services.offline_guard import throttled_guard
+        throttled_guard()
+    except Exception:
+        log.exception("offline guard hook failed")
     db = SessionLocal()
     try:
         sessions = db.execute(

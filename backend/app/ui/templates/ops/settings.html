@@ -1,0 +1,16 @@
+{% extends "ops/base_ops.html" %}
+{% block title %}Настройки{% endblock %}
+{% block content %}
+<div class="card" style="max-width:680px">
+<h1>⚙️ Настройки</h1>
+<form method="post">
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="auto_enabled" style="width:auto" {% if auto_enabled %}checked{% endif %}> Автоподтверждение заявок (глобально)</label>
+  <label>Общий лимит автоподтверждения, ₽</label><input name="auto_limit_rub" value="{{ '%.2f' % auto_limit }}">
+  <label style="display:flex;gap:8px;align-items:center;margin-top:14px"><input type="checkbox" name="offline_mode" style="width:auto" {% if offline_mode %}checked{% endif %}> Офлайн-гарант: выдавать панели срок «действует до» по оплаченному балансу</label>
+  <label>Страховой потолок горизонта, часов</label><input name="cap_hours" type="number" min="1" max="720" value="{{ cap_hours }}">
+  <button class="btn" type="submit">Сохранить</button>
+</form>
+<form method="post" action="/admin-ops/guard/run" style="margin-top:10px"><button class="btn sec" type="submit">⚡ Сверка сейчас</button></form>
+<p class="note">Персональные лимиты и обещанный платёж — в «Кошельки → Изменить». Автоподтверждение одноразовое на кошелёк и на IP. Офлайн-гарант держит доступ клиентов при упавшем биллинге и сверяет списания после восстановления по трафику панели.</p>
+</div>
+{% endblock %}

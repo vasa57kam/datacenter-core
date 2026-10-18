@@ -1176,3 +1176,122 @@ def ops_rules(request: Request):
     r = _guard(request)
     if r: return r
     return templates.TemplateResponse(request, "ops/rules.html", {})
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def ops_settings(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    return templates.TemplateResponse(request, "ops/settings.html", {
+        "auto_enabled": _gset(db, "auto_approve_enabled", "1") == "1",
+        "auto_limit": round(int(_gset(db, "auto_approve_limit_minor", "50000")) / 100, 2),
+        "offline_mode": _gset(db, "offline_mode", "1") == "1",
+        "cap_hours": _gset(db, "offline_cap_hours", "72"),
+    })
+
+
+@router.post("/settings")
+def ops_settings_save(request: Request, auto_enabled: str = Form(""), auto_limit_rub: str = Form(""),
+                      offline_mode: str = Form(""), cap_hours: int = Form(72), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    _sset(db, "auto_approve_enabled", "1" if auto_enabled else "0")
+    try:
+        _sset(db, "auto_approve_limit_minor", str(int(round(float(auto_limit_rub.replace(",", ".")) * 100))))
+    except ValueError:
+        pass
+    _sset(db, "offline_mode", "1" if offline_mode else "0")
+    _sset(db, "offline_cap_hours", str(max(1, min(cap_hours, 720))))
+    _audit(db, request, "settings_save", "auto+offline")
+    db.commit()
+    return RedirectResponse("/admin-ops/settings", status_code=303)
+
+
+def _seed_methods(db) -> None:
+    cnt = db.execute(select(func.count(_PM.id))).scalar() or 0
+    if cnt:
+        return
+    for code, title, instr, visible, order in [
+        ("transfer", "Перевод на карту", "Переведите сумму на карту Сбербанк по номеру +7 000 000-00-00 (Имя Фамилия). В комментарии укажите ваш email.", True, 10),
+        ("cash", "Наличные", "Передайте наличные администратору или кассиру.", False, 20),
+        ("other", "Другое", "Опишите в комментарии способ оплаты — администратор свяжется с вами.", True, 30)]:
+        db.add(_PM(code=code, title=title, instructions=instr, client_visible=visible, sort_order=order))
+    db.commit()
+
+
+@router.get("/paymethods", response_class=HTMLResponse)
+def ops_paymethods(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    _seed_methods(db)
+    items = db.execute(select(_PM).order_by(_PM.sort_order)).scalars().all()
+    rows = [{"cells": [m.id, m.code, m.title, "да" if m.client_visible else "нет (касса)", "да" if m.active else "нет"],
+             "actions": [{"label": "Изменить", "url": f"/admin-ops/paymethods/{m.id}", "method": "GET"},
+                         {"label": "Выключить" if m.active else "Включить", "url": f"/admin-ops/paymethods/{m.id}/toggle", "method": "POST", "cls": "sec"}]}
+            for m in items]
+    return templates.TemplateResponse(request, "ops/table.html", {
+        "title": "Способы оплаты", "columns": ["№", "Код", "Название", "Виден клиенту", "Активен"], "rows": rows,
+        "extra": '<p><a class="btn" href="/admin-ops/paymethods/new">+ Создать способ</a></p>'})
+
+
+@router.get("/paymethods/new", response_class=HTMLResponse)
+def ops_paymethod_new(request: Request):
+    r = _guard(request)
+    if r: return r
+    return templates.TemplateResponse(request, "ops/paymethod_edit.html", {"m": None})
+
+
+@router.post("/paymethods/new")
+def ops_paymethod_create(request: Request, code: str = Form(), title: str = Form(), instructions: str = Form(""),
+                         client_visible: str = Form(""), sort_order: int = Form(0), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    code = (code or "").strip().lower()
+    if code and db.execute(select(_PM).where(_PM.code == code)).scalar_one_or_none() is None:
+        db.add(_PM(code=code, title=title.strip() or code, instructions=instructions,
+                   client_visible=bool(client_visible), sort_order=sort_order))
+        db.commit()
+    return RedirectResponse("/admin-ops/paymethods", status_code=303)
+
+
+@router.get("/paymethods/{mid}", response_class=HTMLResponse)
+def ops_paymethod_edit(mid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    m = db.get(_PM, mid)
+    if m is None: return RedirectResponse("/admin-ops/paymethods", status_code=303)
+    return templates.TemplateResponse(request, "ops/paymethod_edit.html", {"m": m})
+
+
+@router.post("/paymethods/{mid}")
+def ops_paymethod_save(mid: int, request: Request, title: str = Form(), instructions: str = Form(""),
+                       client_visible: str = Form(""), sort_order: int = Form(0), db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    m = db.get(_PM, mid)
+    if m is not None:
+        m.title = title.strip() or m.title
+        m.instructions = instructions
+        m.client_visible = bool(client_visible)
+        m.sort_order = sort_order
+        _audit(db, request, "paymethod_edit", m.code)
+        db.commit()
+    return RedirectResponse("/admin-ops/paymethods", status_code=303)
+
+
+@router.post("/paymethods/{mid}/toggle")
+def ops_paymethod_toggle(mid: int, request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    m = db.get(_PM, mid)
+    if m is not None:
+        m.active = not m.active
+        db.commit()
+    return RedirectResponse("/admin-ops/paymethods", status_code=303)
+
+
+@router.get("/cashier-guide", response_class=HTMLResponse)
+def ops_cashier_guide(request: Request):
+    r = _guard(request)
+    if r: return r
+    return templates.TemplateResponse(request, "ops/cashier_guide.html", {})

@@ -165,6 +165,40 @@ class ThreeXuiAdapter(VpnAdapter):
         }
         await self._request("POST", f"/panel/api/clients/update/{quote(account.username)}", payload)
 
+    async def get_client_traffic(self, db, account) -> dict | None:
+        try:
+            res = await self._request("GET", f"/panel/api/inbounds/getClientTraffics/{account.username}", None)
+            obj = res.get("obj") if isinstance(res, dict) else None
+            if obj:
+                return {"uuid": obj.get("id"), "bytes": int(obj.get("up", 0)) + int(obj.get("down", 0))}
+        except Exception as e:
+            log.warning("get_client_traffic failed: %s", e)
+        return None
+
+    async def set_client_expiry(self, db, account, node, expiry_ms: int) -> bool:
+        import json as _json
+        try:
+            inbound_id = (node.extra or {}).get("inbound_id")
+            if not inbound_id:
+                return False
+            res = await self._request("GET", f"/panel/api/inbounds/get/{inbound_id}", None)
+            obj = (res or {}).get("obj") or {}
+            settings = _json.loads(obj.get("settings") or "{}")
+            target = None
+            for c in (settings.get("clients") or []):
+                if c.get("email") == account.username:
+                    target = c
+                    break
+            if target is None:
+                return False
+            target["expiryTime"] = int(expiry_ms)
+            target.setdefault("enable", True)
+            await self._request("POST", f"/panel/api/inbounds/updateClient/{target['id']}", target)
+            return True
+        except Exception as e:
+            log.warning("set_client_expiry failed: %s", e)
+            return False
+
     async def delete_account(self, db, account) -> None:
         await self._request(
             "POST",

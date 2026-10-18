@@ -12,6 +12,7 @@ from app.adapters.vpn import get_adapter
 from app.core.tz import now as tz_now
 from app.core import security
 from app.db import get_db
+from app.models import PaymentMethod as _PM
 from app.models import (
     LedgerEntry, PaymentRequest, Product, ServiceInstance, SupportTicket,
     TicketMessage, User, VpnAccount, VpnNode,
@@ -95,6 +96,16 @@ def parse_rub(raw: str) -> int:
         return 0
     minor = int((value * 100).to_integral_value())
     return minor if 0 < minor <= MAX_TOPUP_MINOR else 0
+
+
+def _client_methods(db):
+    pm = db.execute(select(_PM).where(_PM.active.is_(True), _PM.client_visible.is_(True)).order_by(_PM.sort_order)).scalars().all()
+    return [(m.code, m.title) for m in pm] or [(c, l) for c, l in TOPUP_METHODS if c != "cash"]
+
+
+def _client_notes(db):
+    pm = db.execute(select(_PM).where(_PM.active.is_(True), _PM.client_visible.is_(True)).order_by(_PM.sort_order)).scalars().all()
+    return {m.code: m.instructions for m in pm} or {k: v for k, v in TOPUP_NOTES.items() if k != "cash"}
 
 
 def _session_alive(request: Request) -> bool:
@@ -280,7 +291,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "user": user, "wallet": wallet, "entries": entries,
         "pending_verify": user.status == "pending_verify",
         "services": services, "payreqs": payreqs,
-        "methods": TOPUP_METHODS, "notes": TOPUP_NOTES,
+        "methods": _client_methods(db), "notes": _client_notes(db),
     })
 
 
@@ -298,7 +309,7 @@ def topup(
     amount_minor = parse_rub(amount)
     if amount_minor <= 0:
         return RedirectResponse("/lk/", status_code=303)
-    if method not in dict(TOPUP_METHODS):
+    if method not in dict(_client_methods(db)):
         method = "other"
     wallet = ledger.get_wallet(db, user.id)
     pr = PaymentRequest(
@@ -308,10 +319,22 @@ def topup(
     db.add(pr)
     db.flush()
     # Одноразовый доверительный лимит: первое пополнение до 500 ₽ зачисляется сразу.
-    AUTO_APPROVE_LIMIT = 50000
-    if (wallet.auto_approved_count or 0) == 0 and amount_minor <= AUTO_APPROVE_LIMIT:
+    from app.core.settings_svc import get_setting as _gs
+    _lim = wallet.auto_approve_limit_minor
+    AUTO_APPROVE_LIMIT = int(_lim) if _lim is not None else int(_gs(db, "auto_approve_limit_minor", "50000"))
+    _enabled = _gs(db, "auto_approve_enabled", "1") == "1"
+    _max_uses = wallet.auto_approve_max_uses or 1
+    if user.status != "active":
+        _enabled = False
+    ip_used = None
+    if user.register_ip:
+        ip_used = db.execute(select(User).where(User.register_ip == user.register_ip, User.auto_used.is_(True), User.id != user.id)).scalars().first()
+    if ip_used is not None:
+        _enabled = False
+    if _enabled and (wallet.auto_approved_count or 0) < _max_uses and amount_minor <= AUTO_APPROVE_LIMIT:
         approve_payreq(db, pr, actor_email="авто (доверительный лимит)")
         wallet.auto_approved_count = (wallet.auto_approved_count or 0) + 1
+        user.auto_used = True
         notify_admin(db, f"🤖 Автоподтверждение (1 раз): #{pr.id} {(amount_minor/100):.0f} ₽ от {user.email}")
     else:
         notify_admin(db, f"💳 Новая заявка #{pr.id}: {(amount_minor/100):.0f} ₽ ({method}) от {user.email}")

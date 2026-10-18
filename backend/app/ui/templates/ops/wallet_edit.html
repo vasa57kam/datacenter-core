@@ -1,11 +1,15 @@
 {% extends "ops/base_ops.html" %}
 {% block title %}Кошелёк{% endblock %}
 {% block content %}
-<div class="card" style="max-width:520px">
+<div class="card" style="max-width:560px">
 <h1>Кошелёк пользователя №{{ w.user_id }}</h1>
 <form method="post">
   <label>Баланс, ₽</label><input name="balance_rub" value="{{ '%.2f' % (w.balance_minor / 100) }}">
   <label>Обещанный платёж (лимит минуса), ₽</label><input name="promise_rub" value="{{ '%.2f' % ((w.promise_limit_minor or 0) / 100) }}">
+  <label>Автоподтверждение: личный лимит, ₽ (пусто = общий)</label>
+  <input name="auto_limit_rub" value="{{ '' if w.auto_approve_limit_minor is none else '%.2f' % (w.auto_approve_limit_minor / 100) }}" placeholder="общий">
+  <label>Автоподтверждение: сколько раз можно</label><input name="auto_uses" type="number" min="0" value="{{ w.auto_approve_max_uses or 1 }}">
+  <label>Использовано автоподтверждений (сброс → 0)</label><input name="auto_used" type="number" min="0" value="{{ w.auto_approved_count or 0 }}">
   <button class="btn" type="submit">Сохранить</button> <a class="btn sec" href="/admin-ops/wallets">Отмена</a>
 </form>
 </div>

@@ -48,6 +48,22 @@ async def _admin_root_redirect_slash():
     return _RR("/admin-ops/", status_code=302)
 
 
+
+
+@app.on_event("startup")
+def _startup_guard():
+    import threading
+    def _run():
+        import time as _t
+        _t.sleep(20)
+        try:
+            from app.services.offline_guard import run_guard
+            run_guard()
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+
+
 setup_admin(app, secret_key=settings.jwt_secret)
 
 
