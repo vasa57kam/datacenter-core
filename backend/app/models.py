@@ -313,3 +313,22 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(Text, nullable=False)
     target: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+
+
+class PaymentMethod(Base):
+    __tablename__ = "payment_methods"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    client_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False, default="")

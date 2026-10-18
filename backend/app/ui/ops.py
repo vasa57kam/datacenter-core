@@ -299,6 +299,7 @@ from app.models import (
     ProvisioningTask as _Task, ServiceInstance as _Service, UsageSession as _Session,
     VpnAccount as _Account, VpnNode as _Node, Wallet as _Wallet,
 )
+from app.models import PaymentMethod as _PM, SystemSetting as _SS
 from app.services import ledger as _ledger
 from app.services.provisioning import enqueue_task as _enqueue
 
