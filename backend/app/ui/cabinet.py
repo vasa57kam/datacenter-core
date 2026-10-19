@@ -489,6 +489,15 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
         if node is not None and account.status != "deleted":
             cfg = get_adapter(node).render_config(db, account)
             link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
+    task_error = task_status = None
+    if account is None:
+        from app.models import ProvisioningTask as _PT2
+        lt = db.execute(
+            select(_PT2).where(_PT2.entity_type == "service_instance", _PT2.entity_id == service.id,
+                               _PT2.action == "create").order_by(_PT2.id.desc())
+        ).scalars().first()
+        if lt is not None:
+            task_status, task_error = lt.status, lt.error
     qr_svg = ""
     qr_target = sub_url or link
     if qr_target:
@@ -500,7 +509,7 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
             qr_svg = ""
     return templates.TemplateResponse(request, "lk/config.html", {
         "user": user, "service": service, "link": link, "sub_url": sub_url,
-        "conf": conf, "qr_svg": qr_svg,
+        "conf": conf, "qr_svg": qr_svg, "task_status": task_status, "task_error": task_error,
     })
 
 
@@ -723,3 +732,14 @@ def kassa_reject(pid: int, request: Request, db: Session = Depends(get_db)):
         pr.status = "rejected"
         db.commit()
     return RedirectResponse("/lk/kassa", status_code=303)
+
+
+@router.post("/services/{service_id}/reissue")
+def service_reissue(service_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        raise HTTPException(status_code=401)
+    service = _own_service(db, user, service_id)
+    enqueue_task(db, "service_instance", service.id, "create")
+    db.commit()
+    return RedirectResponse(f"/lk/services/{service.id}/config", status_code=303)

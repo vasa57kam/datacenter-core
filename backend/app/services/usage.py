@@ -14,7 +14,7 @@ from app.core.notifications import notify_admin
 from app.services.provisioning import enqueue_task
 
 log = logging.getLogger(__name__)
-_RESET_STUCK = {"v": False}
+_RESET_STUCK = {"t": 0.0}
 
 TICK_SECONDS = {"second": 1, "minute": 60}
 TRAFFIC_BYTES = {"gb": 1024 ** 3, "mb": 1024 ** 2}
@@ -90,14 +90,15 @@ def charge_active_sessions() -> None:
         throttled_guard()
     except Exception:
         log.exception("offline guard hook failed")
-    if not _RESET_STUCK["v"]:
-        _RESET_STUCK["v"] = True
+    import time as _t
+    if _t.time() - _RESET_STUCK.get("t", 0) > 600:
+        _RESET_STUCK["t"] = _t.time()
         try:
             from app.models import ProvisioningTask as _PT
             dbx = SessionLocal()
             try:
                 stuck = dbx.execute(
-                    select(_PT).where(_PT.status == "error", _PT.attempts <= 3)
+                    select(_PT).where(_PT.status == "error", _PT.attempts <= 5, _PT.action == "create")
                 ).scalars().all()
                 for t in stuck:
                     t.status = "pending"

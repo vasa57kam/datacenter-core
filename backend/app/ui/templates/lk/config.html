@@ -11,7 +11,11 @@
   {% if qr_svg %}<p style="margin-top:16px"><span class="qr">{{ qr_svg | safe }}</span></p>
   <p class="muted">Наведите камеру в приложении — ключ добавится автоматически.</p>{% endif %}
 {% else %}
-  <p class="muted">Ключ ещё не выпущен — услуга готовится к выдаче. Страница обновится сама.</p>
+  <p class="muted">Ключ ещё не выпущен.
+{% if task_status %}<br>Статус выдачи: <b>{{ task_status }}</b>{% if task_error %} · ошибка: {{ task_error }}{% endif %}{% endif %}
+</p>
+<form method="post" action="/lk/services/{{ service.id }}/reissue"><button class="btn secondary" type="submit">🔁 Перевыпустить ключ</button></form>
+<p class="muted">Страница обновится сама, когда ключ будет готов.</p>
 {% endif %}
 <p style="margin-top:20px"><a class="btn secondary" href="/lk/">← Назад в кабинет</a></p>
 </div>
