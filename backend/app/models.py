@@ -39,6 +39,8 @@ class Wallet(Base):
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="RUB")
     balance_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     auto_approved_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    auto_approve_limit_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    auto_approve_max_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     promise_limit_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     user = relationship("User")

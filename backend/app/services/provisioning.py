@@ -58,8 +58,12 @@ def _execute_create(db: Session, service: ServiceInstance) -> dict:
         select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
     ).scalar_one_or_none()
     if existing:
-        service.status = "active"
-        return {"account_id": existing.id, "already": True}
+        if existing.status == "deleted" or not existing.secret_enc:
+            db.delete(existing)
+            db.flush()
+        else:
+            service.status = "active"
+            return {"account_id": existing.id, "already": True}
 
     node_id = service.config.get("node_id")
     if not node_id:

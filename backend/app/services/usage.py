@@ -14,6 +14,7 @@ from app.core.notifications import notify_admin
 from app.services.provisioning import enqueue_task
 
 log = logging.getLogger(__name__)
+_RETRY_ERR = {"t": 0.0}
 _RESET_STUCK = {"t": 0.0}
 
 TICK_SECONDS = {"second": 1, "minute": 60}
@@ -90,6 +91,26 @@ def charge_active_sessions() -> None:
         throttled_guard()
     except Exception:
         log.exception("offline guard hook failed")
+    import time as _tt
+    if _tt.time() - _RETRY_ERR.get("t", 0) > 600:
+        _RETRY_ERR["t"] = _tt.time()
+        try:
+            from app.models import ProvisioningTask as _PT3
+            dbr = SessionLocal()
+            try:
+                stuck = dbr.execute(
+                    select(_PT3).where(_PT3.status == "error", _PT3.action == "create", _PT3.attempts <= 6)
+                ).scalars().all()
+                for t in stuck:
+                    t.status = "pending"
+                    t.error = None
+                if stuck:
+                    dbr.commit()
+                    log.info("retry %s failed create task(s)", len(stuck))
+            finally:
+                dbr.close()
+        except Exception:
+            log.exception("create-task retry failed")
     import time as _t
     if _t.time() - _RESET_STUCK.get("t", 0) > 600:
         _RESET_STUCK["t"] = _t.time()

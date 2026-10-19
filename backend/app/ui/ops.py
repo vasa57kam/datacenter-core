@@ -1343,3 +1343,14 @@ def ops_status(request: Request, db: Session = Depends(get_db)):
         "db_commit": db_commit.value[:8] if db_commit else "—",
         "sync_ok": sync_ok, "commits": commits, "history": history,
         "patches_applied": len(history)})
+
+
+@router.post("/guard/run")
+def ops_guard_run(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    from app.services.offline_guard import run_guard
+    run_guard(db=db)
+    _audit(db, request, "guard_run", "manual")
+    db.commit()
+    return RedirectResponse("/admin-ops/settings", status_code=303)
