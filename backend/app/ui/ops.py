@@ -1306,3 +1306,40 @@ def ops_cashier_guide(request: Request):
     r = _guard(request)
     if r: return r
     return templates.TemplateResponse(request, "ops/cashier_guide.html", {})
+
+
+@router.get("/status", response_class=HTMLResponse)
+def ops_status(request: Request, db: Session = Depends(get_db)):
+    r = _guard(request)
+    if r: return r
+    import os as _os
+    db_ver = db.get(_SS, "app_version")
+    db_commit = db.get(_SS, "app_commit")
+    deployed = _os.environ.get("DEPLOYED_COMMIT", "—")
+    origin = _os.environ.get("ORIGIN_COMMIT", "—")
+    repo_version = "—"
+    try:
+        with open("/app/VERSION") as f:
+            repo_version = f.read().strip()
+    except Exception:
+        pass
+    commits = []
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", "/app", "log", "--oneline", "-8", "--format=%ad|%h|%s"],
+            stderr=subprocess.STDOUT, timeout=10).decode("utf-8", errors="replace")
+        for line in out.strip().split("\n")[:8]:
+            parts = line.split("|", 2)
+            if len(parts) == 3:
+                commits.append({"date": parts[0], "hash": parts[1], "msg": parts[2]})
+    except Exception:
+        pass
+    history = db.execute(select(_PH).order_by(_PH.id.desc()).limit(50)).scalars().all()
+    sync_ok = (origin == "—") or (deployed == origin)
+    return templates.TemplateResponse(request, "ops/status.html", {
+        "db_version": db_ver.value if db_ver else "—", "repo_version": repo_version,
+        "deployed": deployed[:8] if deployed != "—" else deployed,
+        "origin": origin[:8] if origin != "—" else origin,
+        "db_commit": db_commit.value[:8] if db_commit else "—",
+        "sync_ok": sync_ok, "commits": commits, "history": history,
+        "patches_applied": len(history)})
