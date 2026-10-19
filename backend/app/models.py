@@ -22,7 +22,7 @@ class User(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (
-        CheckConstraint("role in ('client','admin','manager','master')", name="users_role_ck"),
+        CheckConstraint("role in ('client','admin','cashier','manager','master')", name="users_role_ck"),
         CheckConstraint("status in ('active','blocked')", name="users_status_ck"),
     )
     referral_code: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
@@ -334,3 +334,13 @@ class SystemSetting(Base):
 
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
+class PatchHistory(Base):
+    __tablename__ = "patch_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_email: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())

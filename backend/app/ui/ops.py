@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -922,7 +923,7 @@ def ops_product_delete(pid: int, request: Request, db: Session = Depends(get_db)
 
 
 # ================= v81: уведомления, аудит, статистика, bulk, CSV =================
-from app.models import AuditLog as _Audit, Notification as _Notif
+from app.models import AuditLog as _Audit, Notification as _Notif, PatchHistory as _PH
 
 
 def _audit(db, request, action: str, target: str = "") -> None:
@@ -988,6 +989,7 @@ def ops_stats(request: Request, db: Session = Depends(get_db)):
     if r: return r
     from datetime import timedelta
     from app.core.tz import as_msk, now as _now
+    chart, kpi = [], {"clients": 0, "active_services": 0, "revenue_total": 0, "pending": 0}
     try:
         now = _now()
         day0 = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=13)
@@ -999,7 +1001,7 @@ def ops_stats(request: Request, db: Session = Depends(get_db)):
         for e in entries:
             d = as_msk(e.created_at).replace(hour=0, minute=0, second=0, microsecond=0)
             sums[d] = sums.get(d, 0) + abs(e.amount_minor or 0)
-        chart, total = [], 0.0
+        total = 0.0
         for i in range(14):
             d = day0 + timedelta(days=i)
             rub = round(sums.get(d, 0) / 100, 2)
@@ -1014,11 +1016,15 @@ def ops_stats(request: Request, db: Session = Depends(get_db)):
             "revenue_total": round(total, 2),
             "pending": db.execute(select(func.count(_PayReq.id)).where(_PayReq.status == "pending")).scalar() or 0,
         }
+    except Exception as exc:
+        kpi["note"] = f"частичные данные: {exc}"
+    try:
         return templates.TemplateResponse(request, "ops/stats.html", {"chart": chart, "kpi": kpi})
     except Exception:
         import traceback
         return HTMLResponse("<h3>Диагностика stats</h3><pre style='white-space:pre-wrap'>"
                             + traceback.format_exc() + "</pre>")
+
 
 
 @router.get("/ledger/export.csv")
