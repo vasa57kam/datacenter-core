@@ -30,7 +30,11 @@ HEAD=$(git rev-parse HEAD)
 if [ "$BUILT" != "$HEAD" ] || [ "${1:-}" = "--rebuild" ]; then
   say "3/8 Пересборка контейнеров без кэша (1–3 минуты)"
   docker compose build --no-cache api worker >>"$LOG" 2>&1 || fail "Ошибка сборки docker. Смотри: tail -40 $LOG"
-  docker compose up -d >>"$LOG" 2>&1 || fail "docker compose up -d не стартовал: tail -20 $LOG"
+  if ! docker compose up -d >>"$LOG" 2>&1; then
+    echo "   чищу зависшие контейнеры с хэшем в имени и повторяю"
+    docker ps -a --format '{{.Names}}' | grep -E '^[0-9a-f]{12}_' | xargs -r docker rm -f >>"$LOG" 2>&1
+    docker compose up -d >>"$LOG" 2>&1 || fail "docker compose up -d не стартовал: tail -20 $LOG"
+  fi
   docker compose restart api worker >>"$LOG" 2>&1
   echo "$HEAD" > .last_built_commit
 else
