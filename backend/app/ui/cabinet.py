@@ -474,6 +474,15 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
     account = db.execute(
         select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
     ).scalar_one_or_none()
+    if account is None and service.status in ("active", "provisioning", "suspended"):
+        from app.models import ProvisioningTask as _PT
+        open_task = db.execute(
+            select(_PT).where(_PT.entity_type == "service_instance", _PT.entity_id == service.id,
+                              _PT.action == "create", _PT.status.in_(("pending", "running")))
+        ).scalars().first()
+        if open_task is None and (service.config or {}).get("node_id"):
+            enqueue_task(db, "service_instance", service.id, "create")
+            db.commit()
     link = sub_url = conf = None
     if account is not None:
         node = db.get(VpnNode, account.node_id)
