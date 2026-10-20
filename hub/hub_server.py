@@ -35,10 +35,10 @@ def repos():
             for line in deploy.read_text().splitlines():
                 line = line.strip()
                 if line and not line.startswith("#"):
-                    parts = line.split(maxsplit=2)
-                    if len(parts) >= 2:
-                        targets.append({"port": parts[0], "path": parts[1],
-                                        "post": parts[2] if len(parts) > 2 else ""})
+                    parts = line.split(maxsplit=3)
+                    if len(parts) >= 3:
+                        targets.append({"host": parts[0], "port": parts[1], "path": parts[2],
+                                        "post": parts[3] if len(parts) > 3 else ""})
         try:
             last = subprocess.check_output(
                 ["git", "-C", str(p), "log", "-1", "--pretty=%ad|%h|%s", "--date=short"],
@@ -86,7 +86,7 @@ DEPLOY="/srv/git/$NAME.deploy"
 while read -r port path post; do
   [ -z "${{port:-}}" ] && continue
   case "$port" in \\#*) continue;; esac
-  ssh -o StrictHostKeyChecking=accept-new -p "$port" root@{ENV_VARS.get('HUB_HOST','77.51.231.208')} \\
+  ssh -o StrictHostKeyChecking=accept-new -p "${{port:-22}}" root@"$host" \\
     "cd '$path' && git fetch origin main && git reset --hard origin/main && {{ [ -n '$post' ] && bash '$post'; }}" >> {LOG} 2>&1
 done < "$DEPLOY"
 """
@@ -113,10 +113,10 @@ def deploy_edit(name):
         for line in deploy.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
-                parts = line.split(maxsplit=2)
-                if len(parts) >= 2:
-                    targets.append({"port": parts[0], "path": parts[1],
-                                    "post": parts[2] if len(parts) > 2 else ""})
+                parts = line.split(maxsplit=3)
+                if len(parts) >= 3:
+                    targets.append({"host": parts[0], "port": parts[1], "path": parts[2],
+                                    "post": parts[3] if len(parts) > 3 else ""})
     return render_template("deploy_edit.html", name=name, targets=targets)
 
 @app.route("/deploy/<name>/save", methods=["POST"])
@@ -126,12 +126,13 @@ def deploy_save(name):
     lines = []
     i = 0
     while True:
+        host = request.form.get(f"host_{i}")
         port = request.form.get(f"port_{i}")
         path = request.form.get(f"path_{i}")
         post = request.form.get(f"post_{i}", "")
-        if port is None: break
-        if port and path:
-            lines.append(f"{port} {path} {post}".strip())
+        if host is None: break
+        if host and path:
+            lines.append(f"{host} {port or 22} {path} {post}".strip())
         i += 1
     deploy.write_text("\n".join(lines) + "\n" if lines else "")
     return redirect(f"/deploy/{name}?ok=saved")

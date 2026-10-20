@@ -5,8 +5,9 @@
 <p class="mut">Каждая строка: <code>SSH-порт путь-на-цели [post-hook скрипт]</code>. Пустой файл = нет автодеплоя.</p>
 <form method="post" action="/deploy/{{ name }}/save" id="df">
 {% for t in targets %}
-<div class="row">
-  <input name="port_{{ loop.index0 }}" value="{{ t.port }}" placeholder="2172">
+<div class="row5">
+  <input name="host_{{ loop.index0 }}" value="{{ t.host }}" placeholder="192.168.0.172">
+  <input name="port_{{ loop.index0 }}" value="{{ t.port }}" placeholder="22">
   <input name="path_{{ loop.index0 }}" value="{{ t.path }}" placeholder="/opt/hosting">
   <input name="post_{{ loop.index0 }}" value="{{ t.post }}" placeholder="/opt/hosting/scripts/post_deploy.sh">
   <button type="button" class="btn danger" onclick="this.parentNode.remove()">×</button>
@@ -22,7 +23,7 @@ let i = {{ targets|length }};
 function addRow(){
   const d = document.createElement('div');
   d.className = 'row';
-  d.innerHTML = `<input name="port_${i}" placeholder="2172"><input name="path_${i}" placeholder="/opt/hosting"><input name="post_${i}" placeholder="скрипт после деплоя (опц.)"><button type="button" class="btn danger" onclick="this.parentNode.remove()">×</button>`;
+  d.innerHTML = `<input name="host_${i}" placeholder="192.168.0.172"><input name="port_${i}" placeholder="22"><input name="path_${i}" placeholder="/opt/hosting"><input name="post_${i}" placeholder="скрипт после деплоя (опц.)"><button type="button" class="btn danger" onclick="this.parentNode.remove()">×</button>`;
   document.getElementById('extra').appendChild(d);
   i++;
 }

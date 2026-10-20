@@ -5,7 +5,7 @@
 {% if repos %}<table><tr><th>Имя</th><th>Цели деплоя</th><th>Последний коммит</th><th></th></tr>
 {% for r in repos %}<tr>
 <td><b>{{ r.name }}</b><br><code>git clone ssh://root@{{ host }}:2135/srv/git/{{ r.name }}.git</code></td>
-<td>{% for t in r.targets %}<span class="tag">:{{ t.port }} → {{ t.path }}</span>{% else %}<span class="mut">нет целей</span>{% endfor %}</td>
+<td>{% for t in r.targets %}<span class="tag">{{ t.host }}:{{ t.port }} → {{ t.path }}</span>{% else %}<span class="mut">нет целей</span>{% endfor %}</td>
 <td><span class="mut">{{ r.last.date }}</span> <code>{{ r.last.h }}</code><br>{{ r.last.msg }}</td>
 <td>
 <a class="btn sec" href="/deploy/{{ r.name }}">Цели</a>
