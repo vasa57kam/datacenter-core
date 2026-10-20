@@ -211,7 +211,13 @@ def process_pending_tasks_sync() -> int:
                     raise ValueError(f"Unknown entity_type: {task.entity_type}")
                 service = db.get(ServiceInstance, task.entity_id)
                 if service is None:
-                    raise ValueError(f"Service {task.entity_id} not found")
+                    task.status = "done"
+                    task.error = f"orphan: service {task.entity_id} deleted"
+                    task.result = {"orphan": True}
+                    db.commit()
+                    log.info("task %s: orphan service %s deleted, marking done", task.id, task.entity_id)
+                    processed += 1
+                    continue
 
                 result = handler(db, service)
                 task.result = result or {}
@@ -246,7 +252,10 @@ def process_task_now(db: Session, task_id: int) -> None:
             raise ValueError(f"Unknown action: {task.action}")
         service = db.get(ServiceInstance, task.entity_id)
         if service is None:
-            raise ValueError(f"Service {task.entity_id} not found")
+            task.status = "done"
+            task.error = f"orphan: service {task.entity_id} deleted"
+            db.commit()
+            return
         result = handler(db, service)
         task.result = result or {}
         task.status = "done"

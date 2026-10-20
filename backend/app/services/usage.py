@@ -85,6 +85,20 @@ def _suspend(db, service: ServiceInstance, session: UsageSession) -> None:
     db.commit()
 
 
+def _cleanup_orphan_tasks(db) -> int:
+    """Удаляет задачи провижининга для несуществующих услуг."""
+    from app.models import ProvisioningTask as _PT
+    from sqlalchemy import text
+    deleted = db.execute(text(
+        "DELETE FROM provisioning_tasks WHERE entity_type='service_instance' "
+        "AND entity_id NOT IN (SELECT id FROM service_instances)"
+    )).rowcount
+    if deleted:
+        db.commit()
+        log.info("cleaned %s orphan provisioning task(s)", deleted)
+    return deleted
+
+
 def charge_active_sessions() -> None:
     try:
         from app.services.offline_guard import throttled_guard
@@ -132,6 +146,10 @@ def charge_active_sessions() -> None:
         except Exception:
             log.exception("stuck task reset failed")
     db = SessionLocal()
+    try:
+        _cleanup_orphan_tasks(db)
+    except Exception:
+        log.exception("orphan cleanup failed")
     try:
         sessions = db.execute(
             select(UsageSession).where(UsageSession.status == "active")
