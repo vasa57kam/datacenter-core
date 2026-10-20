@@ -483,11 +483,17 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
         if open_task is None and (service.config or {}).get("node_id"):
             enqueue_task(db, "service_instance", service.id, "create")
             db.commit()
+    if account is not None and account.status != "deleted" and (not account.uuid or not account.secret_enc):
+        task_status, task_error = "broken", "аккаунт повреждён — нажми «Перевыпустить ключ»"
     link = sub_url = conf = None
     if account is not None:
         node = db.get(VpnNode, account.node_id)
         if node is not None and account.status != "deleted":
-            cfg = get_adapter(node).render_config(db, account)
+            try:
+                cfg = get_adapter(node).render_config(db, account)
+            except Exception as exc:
+                cfg = {}
+                task_status, task_error = "render_error", str(exc)[:200]
             link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
     task_error = task_status = None
     if account is None:
@@ -740,6 +746,12 @@ def service_reissue(service_id: int, request: Request, db: Session = Depends(get
     if user is None:
         raise HTTPException(status_code=401)
     service = _own_service(db, user, service_id)
+    accs = db.execute(
+        select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+    ).scalars().all()
+    for a in accs:
+        db.delete(a)
+    db.flush()
     enqueue_task(db, "service_instance", service.id, "create")
     db.commit()
     return RedirectResponse(f"/lk/services/{service.id}/config", status_code=303)

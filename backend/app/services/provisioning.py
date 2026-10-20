@@ -58,7 +58,7 @@ def _execute_create(db: Session, service: ServiceInstance) -> dict:
         select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
     ).scalar_one_or_none()
     if existing:
-        if existing.status == "deleted" or not existing.secret_enc:
+        if existing.status == "deleted" or not existing.secret_enc or not existing.uuid:
             db.delete(existing)
             db.flush()
         else:
