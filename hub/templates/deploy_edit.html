@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% block title %}{{ name }} · Цели{% endblock %}
+{% block content %}
+<div class="card"><h1>Цели деплоя: <b>{{ name }}</b></h1>
+{% if request.args.get('ok') %}<p class="ok">✓ Сохранено</p>{% endif %}
+<p class="mut">Каждая строка: <code>SSH-порт путь-на-цели [post-hook скрипт]</code>. Пустой файл = нет автодеплоя.</p>
+<form method="post" action="/deploy/{{ name }}/save" id="df">
+{% for t in targets %}
+<div class="row">
+  <input name="port_{{ loop.index0 }}" value="{{ t.port }}" placeholder="2172">
+  <input name="path_{{ loop.index0 }}" value="{{ t.path }}" placeholder="/opt/hosting">
+  <input name="post_{{ loop.index0 }}" value="{{ t.post }}" placeholder="/opt/hosting/scripts/post_deploy.sh">
+  <button type="button" class="btn danger" onclick="this.parentNode.remove()">×</button>
+</div>
+{% endfor %}
+<div id="extra"></div>
+<button type="button" class="btn sec" onclick="addRow()">+ Добавить цель</button>
+<button class="btn" type="submit">Сохранить</button>
+<a class="btn sec" href="/">Назад</a>
+</form>
+<script>
+let i = {{ targets|length }};
+function addRow(){
+  const d = document.createElement('div');
+  d.className = 'row';
+  d.innerHTML = `<input name="port_${i}" placeholder="2172"><input name="path_${i}" placeholder="/opt/hosting"><input name="post_${i}" placeholder="скрипт после деплоя (опц.)"><button type="button" class="btn danger" onclick="this.parentNode.remove()">×</button>`;
+  document.getElementById('extra').appendChild(d);
+  i++;
+}
+</script>
+</div>
+<div class="card"><h3>Подсказки</h3>
+<p>Порт 2135 — сама эта машина (для self-host сервисов).<br>
+Порт 2172 — VM 104 (хостинг).<br>
+Порт 2222 — VM 102 (cctv).<br>
+Post-hook запускается после <code>git reset --hard</code> — например, рестарт systemd-юнитов.</p>
+</div>
+{% endblock %}
