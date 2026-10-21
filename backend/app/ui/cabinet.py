@@ -495,6 +495,15 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 cfg = {}
                 task_status, task_error = "render_error", str(exc)[:200]
             link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
+    if account is not None and account.status != "deleted" and link is None and account.uuid:
+        _nd = db.get(VpnNode, account.node_id)
+        if _nd is not None and _nd.endpoint_host:
+            _enc = (_nd.extra or {}).get("encryption", "none")
+            link = (f"vless://{account.uuid}@{_nd.endpoint_host}:{_nd.endpoint_port or 443}"
+                    f"?security=none&encryption={_enc}&type=tcp#{_nd.code or 'vpn'}")
+            task_status, task_error = "fallback", "адаптер вернул пусто — ссылка собрана напрямую"
+    if account is not None and link is None and task_status is None:
+        task_status, task_error = "debug", f"uuid={bool(account.uuid)} node={account.node_id}"
     task_error = task_status = None
     if account is None:
         from app.models import ProvisioningTask as _PT2
