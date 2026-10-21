@@ -531,6 +531,8 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 link = (f"vless://{account.uuid}@{_host}:{_port}"
                         f"?security={_sec}&encryption={_enc}&type={_typ}#{_nd.code or 'vpn'}")
                 task_status, task_error = "fallback", "ссылка собрана напрямую из данных ноды"
+    if link is not None and sub_url is None:
+        sub_url = link
     if account is not None and link is None and task_status is None:
         task_status, task_error = "debug", f"uuid={bool(account.uuid)} node={account.node_id}"
     if account is None:
