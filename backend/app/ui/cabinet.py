@@ -483,6 +483,26 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
         if open_task is None and (service.config or {}).get("node_id"):
             enqueue_task(db, "service_instance", service.id, "create")
             db.commit()
+            open_task = db.execute(
+                select(_PT).where(_PT.entity_type == "service_instance", _PT.entity_id == service.id,
+                                  _PT.action == "create", _PT.status.in_(("pending", "running")))
+            ).scalars().first()
+        if open_task is None:
+            open_task = db.execute(
+                select(_PT).where(_PT.entity_type == "service_instance", _PT.entity_id == service.id,
+                                  _PT.action == "create", _PT.status == "error")
+                .order_by(_PT.id.desc())
+            ).scalars().first()
+        if open_task is not None and open_task.status in ("pending", "error"):
+            from app.services.provisioning import process_task_now
+            try:
+                process_task_now(db, open_task.id)
+                db.commit()
+            except Exception:
+                db.rollback()
+            account = db.execute(
+                select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
+            ).scalar_one_or_none()
     if account is not None and account.status != "deleted" and (not account.uuid or not account.secret_enc):
         task_status, task_error = "broken", "аккаунт повреждён — нажми «Перевыпустить ключ»"
     link = sub_url = conf = None
@@ -513,7 +533,6 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 task_status, task_error = "fallback", "ссылка собрана напрямую из данных ноды"
     if account is not None and link is None and task_status is None:
         task_status, task_error = "debug", f"uuid={bool(account.uuid)} node={account.node_id}"
-    task_error = task_status = None
     if account is None:
         from app.models import ProvisioningTask as _PT2
         lt = db.execute(
