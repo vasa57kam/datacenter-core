@@ -1,3 +1,4 @@
+import logging
 import re
 import time
 from urllib.parse import quote
@@ -14,6 +15,9 @@ CSRF_RE = re.compile(
 
 _AUTH_CACHE: dict[int, dict] = {}
 _AUTH_TTL = 600
+
+
+log = logging.getLogger(__name__)
 
 
 class ThreeXuiAdapter(VpnAdapter):
