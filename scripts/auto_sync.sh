@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+exec 9>/var/lock/billing-deploy.lock
+flock -n 9 || { echo "deploy уже идёт — пропускаю"; exit 0; }
+
 # Синхронизация: сравниваем КОММИТ В ОБРАЗЕ (.last_built_commit) с origin/main.
 set -uo pipefail
 cd /opt/billing || exit 0

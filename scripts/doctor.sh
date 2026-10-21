@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+exec 9>/var/lock/billing-deploy.lock
+flock -n 9 || { echo "deploy уже идёт — пропускаю"; exit 0; }
+
 # Доктор: полная синхронизация + проверка согласованности.
 # Что может — чинит сам. Что не может — печатает диагноз по-русски.
 set -uo pipefail
