@@ -497,11 +497,20 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
             link, sub_url, conf = cfg.get("link"), cfg.get("subscription_url"), cfg.get("config_text")
     if account is not None and account.status != "deleted" and link is None and account.uuid:
         _nd = db.get(VpnNode, account.node_id)
-        if _nd is not None and _nd.endpoint_host:
-            _enc = (_nd.extra or {}).get("encryption", "none")
-            link = (f"vless://{account.uuid}@{_nd.endpoint_host}:{_nd.endpoint_port or 443}"
-                    f"?security=none&encryption={_enc}&type=tcp#{_nd.code or 'vpn'}")
-            task_status, task_error = "fallback", "адаптер вернул пусто — ссылка собрана напрямую"
+        if _nd is not None:
+            from urllib.parse import urlparse
+            _ex = _nd.extra or {}
+            _host = (_nd.endpoint_host or _ex.get("endpoint_host")
+                     or urlparse(_nd.api_url or "").hostname or "")
+            _port = (_nd.endpoint_port or _ex.get("inbound_port")
+                     or _ex.get("endpoint_port") or 443)
+            if _host:
+                _enc = _ex.get("encryption", "none")
+                _sec = _ex.get("security", "none")
+                _typ = _ex.get("network", "tcp")
+                link = (f"vless://{account.uuid}@{_host}:{_port}"
+                        f"?security={_sec}&encryption={_enc}&type={_typ}#{_nd.code or 'vpn'}")
+                task_status, task_error = "fallback", "ссылка собрана напрямую из данных ноды"
     if account is not None and link is None and task_status is None:
         task_status, task_error = "debug", f"uuid={bool(account.uuid)} node={account.node_id}"
     task_error = task_status = None
