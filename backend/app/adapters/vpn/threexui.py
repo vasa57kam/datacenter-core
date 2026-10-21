@@ -20,6 +20,14 @@ _AUTH_TTL = 600
 log = logging.getLogger(__name__)
 
 
+def _jd(x):
+    """json.loads, устойчивый к уже распарсенному dict/list."""
+    if isinstance(x, (dict, list)):
+        return x
+    import json as _j
+    return _j.loads(x)
+
+
 class ThreeXuiAdapter(VpnAdapter):
     def _base(self) -> str:
         return self.node.api_url.rstrip("/")
@@ -176,7 +184,7 @@ class ThreeXuiAdapter(VpnAdapter):
             if obj:
                 return {"uuid": obj.get("id"), "bytes": int(obj.get("up", 0)) + int(obj.get("down", 0))}
         except Exception as e:
-            log.warning("get_client_traffic failed: %s", e)
+            (log.debug if "404" in str(e) else log.warning)("get_client_traffic failed: %s", e)
         return None
 
     async def set_client_expiry(self, db, account, node, expiry_ms: int) -> bool:
@@ -187,7 +195,7 @@ class ThreeXuiAdapter(VpnAdapter):
                 return False
             res = await self._request("GET", f"/panel/api/inbounds/get/{inbound_id}", None)
             obj = (res or {}).get("obj") or {}
-            settings = _json.loads(obj.get("settings") or "{}")
+            settings = __jd(obj.get("settings") or "{}")
             target = None
             for c in (settings.get("clients") or []):
                 if c.get("email") == account.username:
