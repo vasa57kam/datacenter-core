@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}Репозитории{% endblock %}
+{% block content %}
+{% if flash %}<div class="card" style="background:#1a3d2e;border-color:#238636"><p class="ok">✓ Операция выполнена: {{ flash }}</p></div>{% endif %}
+<div class="card"><h1>Репозитории</h1>
+{% if repos %}<table><tr><th>Имя</th><th>Цели деплоя</th><th>Последний коммит</th><th></th></tr>
+{% for r in repos %}<tr>
+<td><b>{{ r.name }}</b><br><code>git clone ssh://root@{{ host }}:2135/srv/git/{{ r.name }}.git</code></td>
+<td>{% for t in r.targets %}<span class="tag">{{ t.host }}:{{ t.port }} → {{ t.path }}</span>{% else %}<span class="mut">нет целей</span>{% endfor %}</td>
+<td><span class="mut">{{ r.last.date }}</span> <code>{{ r.last.h }}</code><br>{{ r.last.msg }}</td>
+<td>
+<a class="btn sec" href="/deploy/{{ r.name }}">Цели</a>
+<form style="display:inline" method="post" action="/deploy/{{ r.name }}/run"><button class="btn blue" type="submit">Деплой</button></form>
+<form style="display:inline" method="post" action="/delete/{{ r.name }}" onsubmit="return confirm('Удалить репозиторий {{ r.name }}?')"><button class="btn danger" type="submit">×</button></form>
+</td></tr>{% endfor %}</table>
+{% else %}<p class="mut">Репозиториев пока нет.</p>{% endif %}</div>
+
+<div class="card"><h1>＋ Создать репозиторий</h1>
+<form method="post" action="/create" class="grid">
+<div><label>Имя (латиница, без пробелов)</label><input name="name" placeholder="my-project" pattern="[a-zA-Z0-9_-]+"></div>
+<div style="display:flex;align-items:end"><button class="btn" type="submit">Создать bare-репо</button></div>
+</form>
+<p class="mut">После создания добавь цели деплоя в разделе «Цели» и клонируй репо командой выше.</p>
+</div>
+{% endblock %}

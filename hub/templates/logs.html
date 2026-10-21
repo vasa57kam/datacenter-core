@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Логи{% endblock %}
+{% block content %}
+<div class="card"><h1>Логи автодеплоя</h1>
+{% if flash %}<p class="ok">✓ {{ flash }}</p>{% endif %}
+<p class="mut">Последние 200 строк из <code>/var/log/hub-deploy.log</code>.</p>
+<pre>{% for l in lines %}{{ l }}
+{% else %}(пусто){% endfor %}</pre>
+<button class="btn sec" onclick="location.reload()">Обновить</button>
+</div>
+{% endblock %}
