@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Промо и очистка · Пульт</title>
+<style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}
+h1{font-size:22px}h2{font-size:17px;margin-top:28px;color:#d29922}
+label{display:block;margin:12px 0 4px;color:#9da7b3}
+input,select{padding:9px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3}
+input[type=text],input:not([type]){width:340px}
+button{margin-top:14px;padding:10px 22px;border:0;border-radius:8px;background:#d29922;color:#111;font-weight:600;cursor:pointer}
+button.red{background:#da3633;color:#fff}
+.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}
+.ok{color:#3fb950}.warn{background:#2d1215;border:1px solid #f8514966;padding:12px;border-radius:8px;margin:14px 0;color:#ffa198}
+.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:18px;margin-top:14px}small{color:#6e7681}</style>
+</head><body>
+<div class="nav"><a href="/admin-ops/">← Пульт</a><a href="/admin-ops/ledger">Журнал →</a></div>
+<h1>🎯 Промо-центр и обслуживание журнала</h1>
+{% if ok %}<p class="ok">✓ Настройки сохранены</p>{% endif %}
+{% if msg and msg.startswith("deleted") %}<p class="ok">✓ Удалено записей журнала: {{ msg.split("-")[1] }}</p>{% endif %}
+{% if msg == "no-confirm" %}<p class="warn">Подтверждение не совпало: нужно ввести слово УДАЛИТЬ</p>{% endif %}
+
+<h2>Промоакции и бонусы</h2>
+<div class="card">
+<form method="post" action="/admin-ops/promo">
+{% for k, label, d in keys %}
+<label>{{ label }} <small>· {{ k }}</small></label>
+<input name="{{ k }}" value="{{ vals[k] }}">
+{% endfor %}
+<button type="submit">Сохранить промо</button>
+</form>
+<p><small>0 отключает бонус. Применяется сразу к новым одобрениям заявок.</small></p>
+</div>
+
+<h2>Очистка финансового журнала</h2>
+<div class="card">
+<form method="get">
+<label>Старше дней: <input name="days" value="{{ days }}" style="width:90px"></label>
+<label>Что чистить:
+<select name="kind">
+<option value="usage" {% if kind == "usage" %}selected{% endif %}>Списания за использование (vpn_usage_*)</option>
+<option value="debits" {% if kind == "debits" %}selected{% endif %}>Все списания (отрицательные)</option>
+</select></label>
+<button type="submit">Пересчитать</button>
+</form>
+<p>Под фильтр попадает записей: <b>{{ cnt }}</b>. Зачисления (пополнения, кэшбэк, купоны) не удаляются — это аудит доходов и защита от повторных начислений. Балансы кошельков хранятся отдельно и не меняются.</p>
+<form method="post" action="/admin-ops/ledger/clean" onsubmit="return confirm('Удалить записи журнала безвозвратно?')">
+<input type="hidden" name="days" value="{{ days }}">
+<input type="hidden" name="kind" value="{{ kind }}">
+<label>Подтверждение (слово УДАЛИТЬ): <input name="confirm"></label>
+<button class="red" type="submit">Удалить {{ cnt }} записей</button>
+</form>
+</div>
+</body></html>

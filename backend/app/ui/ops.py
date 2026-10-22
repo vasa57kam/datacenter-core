@@ -1360,3 +1360,117 @@ def ops_guard_run(request: Request, db: Session = Depends(get_db)):
     _audit(db, request, "guard_run", "manual")
     db.commit()
     return RedirectResponse("/admin-ops/settings", status_code=303)
+
+
+# ================= v138: Промо-центр и очистка журнала (admin-ops) =================
+for _n138, _imp138 in (
+    ("HTMLResponse", "from fastapi.responses import HTMLResponse"),
+    ("RedirectResponse", "from fastapi.responses import RedirectResponse"),
+    ("Form", "from fastapi import Form"),
+    ("HTTPException", "from fastapi import HTTPException"),
+    ("Depends", "from fastapi import Depends"),
+    ("Session", "from sqlalchemy.orm import Session"),
+    ("Request", "from fastapi import Request"),
+):
+    try:
+        eval(_n138)
+    except NameError:
+        exec(_imp138)
+try:
+    get_db
+except NameError:
+    from app.db import get_db
+
+from fastapi.templating import Jinja2Templates as _JT138
+_t138 = Jinja2Templates(directory="app/ui/templates")
+
+def _admin138(db, request):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return u
+
+_PROMO138 = [
+    ("cashback_percent", "Кэшбэк с пополнения, % (0 — выключен)", "3"),
+    ("cashback_min_minor", "Порог кэшбэка, копеек (100000 = 1000 ₽)", "100000"),
+    ("referral_reward_minor", "Награда за реферала, копеек (0 — выключена)", "5000"),
+    ("auto_approve_enabled", "Доверительный лимит: включён (1/0)", "1"),
+    ("auto_approve_limit_minor", "Доверительный лимит, копеек", "50000"),
+    ("auto_approve_max_uses", "Доверительный лимит: использований на кошелёк", "1"),
+]
+
+def _cnt138(db, d, kind):
+    from app.models import LedgerEntry as _LE
+    from sqlalchemy import func as _fn, select as _sel
+    from app.core.tz import now as _now138
+    from datetime import timedelta as _td
+    cutoff = _now138() - _td(days=d)
+    w = [_LE.created_at < cutoff]
+    if kind == "usage":
+        w.append(_LE.reason.like("vpn_usage_%"))
+    elif kind == "debits":
+        w.append(_LE.amount_minor < 0)
+    return db.execute(_sel(_fn.count()).select_from(_LE).where(*w)).scalar() or 0
+
+@router.get("/promo", response_class=HTMLResponse)
+def promo_ops138(request: Request, ok: str = "", msg: str = "",
+                 days: str = "90", kind: str = "usage",
+                 db: Session = Depends(get_db)):
+    user = _admin138(db, request)
+    from app.core.settings_svc import get_setting as _gs
+    d = max(1, int(days or 90))
+    vals = {k: (_gs(db, k, dd) or dd) for k, _, dd in _PROMO138}
+    return _t138.TemplateResponse(request, "ops_promo.html", {
+        "user": user, "keys": _PROMO138, "vals": vals, "ok": ok,
+        "msg": msg, "days": d, "kind": kind, "cnt": _cnt138(db, d, kind)})
+
+@router.post("/promo")
+async def promo_ops138_save(request: Request, db: Session = Depends(get_db)):
+    _admin138(db, request)
+    form = await request.form()
+    from app.core.settings_svc import set_setting as _ss
+    for key, _, dd in _PROMO138:
+        v = (form.get(key) or "").strip() or dd
+        try:
+            if key == "auto_approve_enabled":
+                v = "1" if v in ("1", "on", "true", "да") else "0"
+            elif key == "cashback_percent":
+                v = str(max(0, min(100, int(v))))
+            elif key.endswith("_minor"):
+                v = str(max(0, int(v)))
+            elif key == "auto_approve_max_uses":
+                v = str(max(1, int(v)))
+        except ValueError:
+            v = dd
+        _ss(db, key, v)
+    db.commit()
+    return RedirectResponse("/admin-ops/promo?ok=1", status_code=303)
+
+@router.post("/ledger/clean")
+def ledger_clean138(request: Request, days: str = Form("90"),
+                    kind: str = Form("usage"), confirm: str = Form(""),
+                    db: Session = Depends(get_db)):
+    _admin138(db, request)
+    if confirm.strip() != "УДАЛИТЬ":
+        return RedirectResponse("/admin-ops/promo?msg=no-confirm", status_code=303)
+    if kind not in ("usage", "debits"):
+        return RedirectResponse("/admin-ops/promo?msg=bad-kind", status_code=303)
+    from app.models import LedgerEntry as _LE
+    from sqlalchemy import delete as _del, select as _sel
+    from app.core.tz import now as _now138
+    from datetime import timedelta as _td
+    d = max(1, int(days or 90))
+    cutoff = _now138() - _td(days=d)
+    w = [_LE.created_at < cutoff]
+    if kind == "usage":
+        w.append(_LE.reason.like("vpn_usage_%"))
+    else:
+        w.append(_LE.amount_minor < 0)
+    ids = [r[0] for r in db.execute(
+        _sel(_LE.id).where(*w).order_by(_LE.id.asc()).limit(200000)).all()]
+    done = 0
+    for i in range(0, len(ids), 2000):
+        done += db.execute(_del(_LE).where(_LE.id.in_(ids[i:i+2000]))).rowcount
+    db.commit()
+    return RedirectResponse(f"/admin-ops/promo?msg=deleted-{done}", status_code=303)
