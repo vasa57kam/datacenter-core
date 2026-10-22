@@ -570,7 +570,9 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
         _sid = ((account.extra or {}).get("sub_id")
                 or (account.username or "").split("@")[0])
     if _sid:
-        sub_url = f"{request.url.scheme}://{request.netloc}/sub/{_sid}"
+        sub_url = f"{request.url.scheme}://{request.headers.get('host')}/sub/{_sid}"
+        link = None
+        conf = None
     # QR всегда кодирует подписку, даже если link есть
     if account is not None and link is None and account.uuid:
         _nd = db.get(VpnNode, account.node_id)
