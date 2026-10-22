@@ -536,9 +536,10 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
             ).scalar_one_or_none()
     task_status = task_error = None
+    task_status = task_error = None
+    link = sub_url = conf = None
     if account is not None and account.status != "deleted" and (not account.uuid or not account.secret_enc):
         task_status, task_error = "broken", "аккаунт повреждён — нажми «Перевыпустить ключ»"
-    link = sub_url = conf = None
     if account is not None:
         node = db.get(VpnNode, account.node_id)
         if node is not None and account.status != "deleted":
@@ -564,11 +565,28 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 link = (f"vless://{account.uuid}@{_host}:{_port}"
                         f"?security={_sec}&encryption={_enc}&type={_typ}#{_nd.code or 'vpn'}")
                 task_status, task_error = "fallback", "ссылка собрана напрямую из данных ноды"
-    if account is not None and sub_url is None:
+    _sid = None
+    if account is not None:
         _sid = ((account.extra or {}).get("sub_id")
                 or (account.username or "").split("@")[0])
-        if _sid:
-            sub_url = f"{request.url.scheme}://{request.netloc}/sub/{_sid}"
+    if _sid:
+        sub_url = f"{request.url.scheme}://{request.netloc}/sub/{_sid}"
+    # QR всегда кодирует подписку, даже если link есть
+    if account is not None and link is None and account.uuid:
+        _nd = db.get(VpnNode, account.node_id)
+        if _nd is not None:
+            from urllib.parse import urlparse
+            _ex = _nd.extra or {}
+            _host = (_nd.endpoint_host or _ex.get("endpoint_host")
+                     or urlparse(_nd.api_url or "").hostname or "")
+            _port = (_nd.endpoint_port or _ex.get("inbound_port")
+                     or _ex.get("endpoint_port") or 443)
+            if _host:
+                _enc = _ex.get("encryption", "none")
+                _sec = _ex.get("security", "none")
+                _typ = _ex.get("network", "tcp")
+                link = (f"vless://{account.uuid}@{_host}:{_port}"
+                        f"?security={_sec}&encryption={_enc}&type={_typ}#{_nd.code or 'vpn'}")
     if account is not None and link is None and task_status is None:
         task_status, task_error = "debug", f"uuid={bool(account.uuid)} node={account.node_id}"
     if account is None:
