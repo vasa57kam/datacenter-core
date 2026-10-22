@@ -503,6 +503,7 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
             account = db.execute(
                 select(VpnAccount).where(VpnAccount.service_instance_id == service.id)
             ).scalar_one_or_none()
+    task_status = task_error = None
     if account is not None and account.status != "deleted" and (not account.uuid or not account.secret_enc):
         task_status, task_error = "broken", "аккаунт повреждён — нажми «Перевыпустить ключ»"
     link = sub_url = conf = None
