@@ -859,3 +859,91 @@ def service_reissue(service_id: int, request: Request, db: Session = Depends(get
     enqueue_task(db, "service_instance", service.id, "create")
     db.commit()
     return RedirectResponse(f"/lk/services/{service.id}/config", status_code=303)
+
+
+# ================= v137: Промо-центр и журнал (admin) =================
+
+_PROMO_KEYS = [
+    ("cashback_percent", "Кэшбэк с пополнения, % (0 — выключен)", "3"),
+    ("cashback_min_minor", "Порог кэшбэка, копеек (100000 = 1000 ₽)", "100000"),
+    ("referral_reward_minor", "Награда за реферала, копеек (0 — выключена)", "5000"),
+    ("auto_approve_enabled", "Доверительный лимит: включён (1/0)", "1"),
+    ("auto_approve_limit_minor", "Доверительный лимит, копеек (одноразово)", "50000"),
+    ("auto_approve_max_uses", "Доверительный лимит: использований на кошелёк", "1"),
+]
+
+def _admin_user(db, request):
+    user = _current_user(db, request)
+    if user is None or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
+
+@router.get("/promo", response_class=HTMLResponse)
+def promo_page(request: Request, ok: str = "", db: Session = Depends(get_db)):
+    user = _admin_user(db, request)
+    from app.core.settings_svc import get_setting as _gs
+    vals = {k: (_gs(db, k, d) or d) for k, _, d in _PROMO_KEYS}
+    return templates.TemplateResponse(request, "lk/promo.html",
+                                      {"user": user, "keys": _PROMO_KEYS, "vals": vals, "ok": ok})
+
+@router.post("/promo")
+async def promo_save(request: Request, db: Session = Depends(get_db)):
+    _admin_user(db, request)
+    form = await request.form()
+    from app.core.settings_svc import set_setting as _ss
+    for key, _, d in _PROMO_KEYS:
+        v = (form.get(key) or "").strip() or d
+        try:
+            if key == "auto_approve_enabled":
+                v = "1" if v in ("1", "on", "true", "да") else "0"
+            elif key == "cashback_percent":
+                v = str(max(0, min(100, int(v))))
+            elif key.endswith("_minor"):
+                v = str(max(0, int(v)))
+            elif key == "auto_approve_max_uses":
+                v = str(max(1, int(v)))
+        except ValueError:
+            v = d
+        _ss(db, key, v)
+    db.commit()
+    return RedirectResponse("/lk/promo?ok=1", status_code=303)
+
+def _ledger_filter(db, days: int, kind: str):
+    from datetime import timedelta
+    cutoff = tz_now() - timedelta(days=days)
+    q = select(LedgerEntry).where(LedgerEntry.created_at < cutoff)
+    if kind == "usage":
+        q = q.where(LedgerEntry.reason.like("vpn_usage_%"))
+    elif kind == "debits":
+        q = q.where(LedgerEntry.amount_minor < 0)
+    return q
+
+@router.get("/ledger-admin", response_class=HTMLResponse)
+def ledger_admin(request: Request, days: str = "90", kind: str = "usage",
+                 msg: str = "", db: Session = Depends(get_db)):
+    user = _admin_user(db, request)
+    d = max(1, int(days or 90))
+    q = _ledger_filter(db, d, kind)
+    cnt = db.execute(select(func.count()).select_from(LedgerEntry)
+                     .where(q.whereclause)).scalar() or 0
+    rows = db.execute(q.order_by(LedgerEntry.id.desc()).limit(300)).scalars().all()
+    return templates.TemplateResponse(request, "lk/ledger_admin.html",
+                                      {"user": user, "days": d, "kind": kind,
+                                       "cnt": cnt, "rows": rows, "msg": msg})
+
+@router.post("/ledger-admin/delete")
+def ledger_admin_delete(request: Request, days: str = Form("90"),
+                        kind: str = Form("usage"), confirm: str = Form(""),
+                        db: Session = Depends(get_db)):
+    _admin_user(db, request)
+    if confirm.strip() != "УДАЛИТЬ":
+        return RedirectResponse("/lk/ledger-admin?msg=no-confirm", status_code=303)
+    from sqlalchemy import delete as sa_delete
+    d = max(1, int(days or 90))
+    q = _ledger_filter(db, d, kind)
+    ids = [r.id for r in db.execute(q.order_by(LedgerEntry.id.asc())).scalars().all()][:50000]
+    done = 0
+    for i in range(0, len(ids), 1000):
+        done += db.execute(sa_delete(LedgerEntry).where(LedgerEntry.id.in_(ids[i:i+1000]))).rowcount
+    db.commit()
+    return RedirectResponse(f"/lk/ledger-admin?msg=deleted-{done}", status_code=303)

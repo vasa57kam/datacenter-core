@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Финансовый журнал · ITKAM34</title>
+<style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}h1{font-size:20px}table{border-collapse:collapse;margin-top:12px;font-size:13px}td,th{padding:5px 10px;border-bottom:1px solid #21262d;color:#9da7b3}td.neg{color:#f85149}td.pos{color:#3fb950}input,select{padding:8px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3}button{padding:10px 22px;border:0;border-radius:8px;background:#da3633;color:#fff;cursor:pointer}.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.warn{background:#2d1215;border:1px solid #f8514966;padding:12px;border-radius:8px;margin:14px 0;color:#ffa198}.msg{color:#3fb950}</style>
+</head><body>
+<div class="nav"><a href="/lk/">← Кабинет</a><a href="/lk/promo">Промо и бонусы →</a></div>
+<h1>📒 Финансовый журнал: очистка</h1>
+{% if msg and msg.startswith("deleted") %}<p class="msg">✓ Удалено записей: {{ msg.split("-")[1] }}</p>{% endif %}
+{% if msg == "no-confirm" %}<p class="warn">Подтверждение не совпало: напиши УДАЛИТЬ</p>{% endif %}
+<form method="get">
+<label>Старше дней: <input name="days" value="{{ days }}" size="4"></label>
+<label>Что чистить:
+<select name="kind">
+<option value="usage" {% if kind=="usage" %}selected{% endif %}>Списания за использование (vpn_usage_*)</option>
+<option value="debits" {% if kind=="debits" %}selected{% endif %}>Все списания (отрицательные)</option>
+</select></label>
+<button type="submit" style="background:#238636">Показать</button>
+</form>
+<p>Под фильтр попадает записей: <b>{{ cnt }}</b> (показаны последние 300).
+Балансы кошельков хранятся отдельно и НЕ меняются при очистке — убирается только история.</p>
+<table><tr><th>id</th><th>дата</th><th>операция</th><th>сумма ₽</th><th>кошелёк</th></tr>
+{% for r in rows %}<tr><td>{{ r.id }}</td><td>{{ r.created_at.strftime("%d.%m.%y %H:%M") }}</td><td>{{ r.reason }}</td>
+<td class="{{ 'pos' if r.amount_minor > 0 else 'neg' }}">{{ (r.amount_minor/100)|round(2) }}</td><td>{{ r.wallet_id }}</td></tr>
+{% endfor %}</table>
+<div class="warn">⚠ Зачисления (пополнения, кэшбэк, купоны) этим инструментом НЕ удаляются —
+это защита от повторного начисления и аудиторский след доходов.
+Удаление списаний безопасно: новые начисления и тарификация продолжатся.</div>
+<form method="post" action="/lk/ledger-admin/delete" onsubmit="return confirm('Точно удалить записи журнала?')">
+<input type="hidden" name="days" value="{{ days }}">
+<input type="hidden" name="kind" value="{{ kind }}">
+<label>Введи слово УДАЛИТЬ для подтверждения: <input name="confirm"></label>
+<button type="submit">Удалить {{ cnt }} записей</button>
+</form>
+</body></html>
