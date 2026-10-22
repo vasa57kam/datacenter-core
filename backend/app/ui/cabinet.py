@@ -142,6 +142,38 @@ def landing(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@public_router.get("/sub/{sub_id}")
+def public_sub(sub_id: str, request: Request, db: Session = Depends(get_db)):
+    import base64
+    from fastapi.responses import Response
+    sid = (sub_id or "").strip()
+    target = None
+    for a in db.execute(select(VpnAccount).where(VpnAccount.status != "deleted")).scalars().all():
+        ex = a.extra or {}
+        if ex.get("sub_id") == sid or (a.username or "").split("@")[0] == sid:
+            target = a
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    node = db.get(VpnNode, target.node_id)
+    link = ""
+    if node is not None:
+        try:
+            link = (get_adapter(node).render_config(db, target).get("link") or "")
+        except Exception:
+            link = ""
+    if not link and target.uuid and node is not None:
+        from urllib.parse import urlparse
+        ex = node.extra or {}
+        host = node.endpoint_host or ex.get("endpoint_host") or urlparse(node.api_url or "").hostname or ""
+        port = node.endpoint_port or ex.get("inbound_port") or ex.get("endpoint_port") or 443
+        link = f"vless://{target.uuid}@{host}:{port}?security=none&encryption=none&type=tcp#{node.code or 'vpn'}"
+    body = base64.b64encode((link or "").encode()).decode()
+    return Response(content=body, media_type="text/plain; charset=utf-8",
+                    headers={"profile-update-interval": "12",
+                             "subscription-userinfo": "upload=0; download=0; total=0; expire=0"})
+
+
 def _ip_risk(db, ip: str) -> bool:
     """Подозрительный IP: много регистраций за сутки / были блокировки / автоподтверждение уже использовали."""
     if not ip:
@@ -532,8 +564,11 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 link = (f"vless://{account.uuid}@{_host}:{_port}"
                         f"?security={_sec}&encryption={_enc}&type={_typ}#{_nd.code or 'vpn'}")
                 task_status, task_error = "fallback", "ссылка собрана напрямую из данных ноды"
-    if link is not None and sub_url is None:
-        sub_url = link
+    if account is not None and sub_url is None:
+        _sid = ((account.extra or {}).get("sub_id")
+                or (account.username or "").split("@")[0])
+        if _sid:
+            sub_url = f"{request.url.scheme}://{request.netloc}/sub/{_sid}"
     if account is not None and link is None and task_status is None:
         task_status, task_error = "debug", f"uuid={bool(account.uuid)} node={account.node_id}"
     if account is None:
