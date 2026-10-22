@@ -565,13 +565,22 @@ def service_config(service_id: int, request: Request, db: Session = Depends(get_
                 link = (f"vless://{account.uuid}@{_host}:{_port}"
                         f"?security={_sec}&encryption={_enc}&type={_typ}#{_nd.code or 'vpn'}")
                 task_status, task_error = "fallback", "ссылка собрана напрямую из данных ноды"
-    _sid = None
-    if account is not None:
-        _sid = ((account.extra or {}).get("sub_id")
-                or (account.username or "").split("@")[0])
+    _sid = (account.extra or {}).get("sub_id") if account is not None else None
     if _sid:
-        sub_url = f"{request.url.scheme}://{request.headers.get('host')}/sub/{_sid}"
-        link = None
+        _nd2 = db.get(VpnNode, account.node_id) if account is not None else None
+        from urllib.parse import urlparse as _up2
+        _ex2 = (_nd2.extra or {}) if _nd2 is not None else {}
+        _h2 = (_ex2.get("sub_domain") or (_nd2.endpoint_host if _nd2 is not None else None)
+               or _up2((_nd2.api_url if _nd2 is not None else "") or "").hostname or "")
+        _p2 = _ex2.get("sub_port") or 2096
+        _pa2 = _ex2.get("sub_path") or "/sub/"
+        sub_url = f"https://{_h2}:{_p2}{_pa2}{_sid}"
+    elif account is not None:
+        _s0 = (account.username or "").split("@")[0]
+        if _s0:
+            sub_url = f"{request.url.scheme}://{request.headers.get('host')}/sub/{_s0}"
+    if sub_url:
+        link = sub_url
         conf = None
     # QR всегда кодирует подписку, даже если link есть
     if account is not None and link is None and account.uuid:
