@@ -88,7 +88,7 @@ class _Friendly:
         return f(v) if f else v
 
 _ENTRY_MAP = {"reason": _labels.ru_reason}
-_PAYREQ_MAP = {"method": _labels.ru_method, "status": _labels.ru_payreq}
+_PAYREQ_MAP = {"method": _labels.ru_method}
 
 TOPUP_METHODS = [
     ("transfer", "Перевод на карту"),
@@ -970,3 +970,6 @@ def ledger_admin_delete(request: Request, days: str = Form("90"),
         done += db.execute(sa_delete(LedgerEntry).where(LedgerEntry.id.in_(ids[i:i+1000]))).rowcount
     db.commit()
     return RedirectResponse(f"/lk/ledger-admin?msg=deleted-{done}", status_code=303)
+
+from app.core.labels import finalize_human as _fh141
+templates.env.finalize = _fh141

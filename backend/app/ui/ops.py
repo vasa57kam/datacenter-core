@@ -1474,3 +1474,7 @@ def ledger_clean138(request: Request, days: str = Form("90"),
         done += db.execute(_del(_LE).where(_LE.id.in_(ids[i:i+2000]))).rowcount
     db.commit()
     return RedirectResponse(f"/admin-ops/promo?msg=deleted-{done}", status_code=303)
+
+from app.core.labels import finalize_human as _fh141
+templates.env.finalize = _fh141
+_t138.env.finalize = _fh141

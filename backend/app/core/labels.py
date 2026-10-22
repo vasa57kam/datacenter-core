@@ -35,3 +35,21 @@ def ru_method(m: str) -> str:
 
 def ru_payreq(s: str) -> str:
     return PAYREQ_RU.get(s, s)
+
+
+CODE_RU = {
+    "cash": "наличные", "transfer": "перевод на карту", "other": "другое",
+    "approved": "зачислено", "pending": "на проверке", "rejected": "отклонено",
+    "debit": "списание", "credit": "зачисление",
+    "active": "активна", "suspended": "приостановлена", "provisioning": "выдаётся",
+    "terminated": "завершена", "closed": "закрыта",
+}
+
+def finalize_human(v):
+    """Jinja finalize: служебные коды в выводе -> русский текст."""
+    if isinstance(v, str):
+        if v in CODE_RU:
+            return CODE_RU[v]
+        if v in REASON_RU:
+            return REASON_RU[v]
+    return v
