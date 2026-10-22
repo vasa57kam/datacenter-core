@@ -35,6 +35,8 @@ RU_STATUS = {
 }
 RU_PAYREQ = {"pending": "на проверке", "approved": "зачислено", "rejected": "отклонено"}
 REASON_RU = {
+    "topup_cashback": "Бонус за пополнение",
+    "referral_reward": "Награда за друга",
     "promo_code": "Промокод",
     "gift_certificate": "Подарочный сертификат",
     "coupon": "Купон",
@@ -69,6 +71,24 @@ templates.env.filters["ru_type"] = lambda t: TYPE_RU.get((t or "").lower(), t)
 templates.env.filters["ru_reason"] = _ru_reason
 templates.env.filters["ru_status"] = lambda s: RU_STATUS.get(s, s)
 templates.env.filters["ru_payreq"] = lambda s: RU_PAYREQ.get(s, s)
+from app.core import labels as _labels
+RU_METHOD = _labels.METHOD_RU
+def _ru_method(m: str) -> str:
+    return _labels.ru_method(m)
+templates.env.filters["ru_method"] = _ru_method
+
+class _Friendly:
+    """Прозрачная обёртка: подменяет указанные поля на человеческие названия."""
+    def __init__(self, obj, maps):
+        object.__setattr__(self, "_o", obj)
+        object.__setattr__(self, "_m", maps)
+    def __getattr__(self, k):
+        v = getattr(self._o, k)
+        f = self._m.get(k)
+        return f(v) if f else v
+
+_ENTRY_MAP = {"reason": _labels.ru_reason}
+_PAYREQ_MAP = {"method": _labels.ru_method, "status": _labels.ru_payreq}
 
 TOPUP_METHODS = [
     ("transfer", "Перевод на карту"),
@@ -320,9 +340,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .limit(10)
     ).scalars().all()
     return templates.TemplateResponse(request, "lk/dashboard.html", {
-        "user": user, "wallet": wallet, "entries": entries,
+        "user": user, "wallet": wallet,
+        "entries": [_Friendly(e, _ENTRY_MAP) for e in entries],
         "pending_verify": user.status == "pending_verify",
-        "services": services, "payreqs": payreqs,
+        "services": services,
+        "payreqs": [_Friendly(pq, _PAYREQ_MAP) for pq in payreqs],
         "methods": _client_methods(db), "notes": _client_notes(db),
     })
 
@@ -782,7 +804,8 @@ def kassa_page(request: Request, error: str = "", ok: str = "", db: Session = De
         .order_by(User.email)
     ).scalars().all()
     return templates.TemplateResponse(request, "lk/kassa.html", {
-        "user": user, "reqs": reqs, "clients": clients, "error": error, "ok": ok})
+        "user": user, "reqs": [_Friendly(r, _PAYREQ_MAP) for r in reqs],
+        "clients": clients, "error": error, "ok": ok})
 
 
 @router.post("/kassa/intake")

@@ -57,7 +57,7 @@
 </div>
 <div class="card"><h3>Заявки на пополнение</h3>
   {% if payreqs %}<table><tr><th>Когда</th><th>Сумма</th><th>Способ</th><th>Статус</th><th></th></tr>
-  {% for p in payreqs %}<tr><td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ (p.amount_minor/100) | round(2) }} ₽</td><td>{{ p.method }}</td>
+  {% for p in payreqs %}<tr><td>{{ p.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ (p.amount_minor/100) | round(2) }} ₽</td><td>{{ p.method_ru }}</td>
   <td>{% if p.status=='approved' %}<span class="pill ok">зачислено</span>{% elif p.status=='pending' %}<span class="pill info">на проверке</span>{% else %}<span class="pill bad">отклонено</span>{% endif %}</td>
   <td>{% if p.status=='pending' %}<form method="post" action="/lk/topup/{{ p.id }}/cancel"><button class="btn secondary" type="submit">Отозвать</button></form>{% endif %}</td></tr>
   {% endfor %}</table>{% else %}<p class="muted">Заявок пока нет.</p>{% endif %}
@@ -65,7 +65,7 @@
 
 <div class="card"><h3>Последние операции</h3>
   {% if entries %}<table><tr><th>Когда</th><th>Операция</th><th>Сумма</th></tr>
-  {% for e in entries %}<tr><td>{{ e.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ e.reason | ru_reason }}</td>
+  {% for e in entries %}<tr><td>{{ e.created_at.strftime('%d.%m %H:%M') }}</td><td>{{ e.reason_ru | ru_reason }}</td>
   <td class="{{ 'neg' if e.amount_minor < 0 else 'pos' }}">{{ (e.amount_minor/100) | round(2) }} ₽</td></tr>
   {% endfor %}</table>{% else %}<p class="muted">Операций пока нет.</p>{% endif %}
 </div>

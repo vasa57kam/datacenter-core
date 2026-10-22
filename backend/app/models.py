@@ -344,3 +344,16 @@ class PatchHistory(Base):
     actor_email: Mapped[str] = mapped_column(Text, nullable=False, default="")
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: tz_now())
+
+
+# ---- v140: дружелюбные названия в UI (monkey-patch свойств, без миграций) ----
+from app.core.labels import ru_reason as _ru_reason_l, ru_method as _ru_method_l, ru_payreq as _ru_payreq_l
+
+def _reason_ru(self):
+    return _ru_reason_l(self.reason or "")
+def _sign_ru(self):
+    return "зачисление" if (self.amount_minor or 0) > 0 else "списание"
+LedgerEntry.reason_ru = property(_reason_ru)
+LedgerEntry.sign_ru = property(_sign_ru)
+PaymentRequest.method_ru = property(lambda self: _ru_method_l(self.method or ""))
+PaymentRequest.status_ru = property(lambda self: _ru_payreq_l(self.status or ""))
