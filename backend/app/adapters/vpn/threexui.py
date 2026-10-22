@@ -195,7 +195,7 @@ class ThreeXuiAdapter(VpnAdapter):
                 return False
             res = await self._request("GET", f"/panel/api/inbounds/get/{inbound_id}", None)
             obj = (res or {}).get("obj") or {}
-            settings = __jd(obj.get("settings") or "{}")
+            settings = _jd(obj.get("settings") or "{}")
             target = None
             for c in (settings.get("clients") or []):
                 if c.get("email") == account.username:
