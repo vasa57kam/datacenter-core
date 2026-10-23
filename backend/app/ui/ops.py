@@ -1192,7 +1192,7 @@ def ops_user_delete(uid: int, request: Request, db: Session = Depends(get_db)):
 def ops_rules(request: Request):
     r = _guard(request)
     if r: return r
-    return templates.TemplateResponse(request, "ops/rules.html", {"doc_text": _doc148(db, "rules"), })
+    return templates.TemplateResponse(request, "ops/rules.html", {})
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -1685,3 +1685,17 @@ def _doc148(db, key: str) -> str:
         elif line.strip():
             out.append("<p>" + line + "</p>")
     return "".join(out)
+
+
+def _doc_html149(key: str) -> str:
+    from app.db import SessionLocal
+    db = SessionLocal()
+    try:
+        return _doc148(db, key)
+    finally:
+        db.close()
+
+try:
+    _t138.env.globals["doc_html"] = _doc_html149
+except NameError:
+    pass

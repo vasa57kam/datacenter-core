@@ -98,17 +98,22 @@ class Theme148Middleware(_BHM148):
         async for chunk in resp.body_iterator:
             body += chunk
         html = body.decode("utf-8", "ignore")
-        if "<!--theme148-->" not in html:
-            tag = "<!--theme148--><style>" + _theme148() + "</style>"
+        need_theme = "<!--theme148-->" not in html
+        need_vp = "name=\"viewport\"" not in html
+        if need_theme or need_vp:
+            ins = ""
+            if need_vp:
+                ins += '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            if need_theme:
+                ins += "<!--theme148--><style>" + _theme148() + "</style>"
             if "</head>" in html:
-                html = html.replace("</head>", tag + "</head>", 1)
+                html = html.replace("</head>", ins + "</head>", 1)
             else:
                 m = re.search(r"<body[^>]*>", html)
                 if m:
-                    html = html[:m.end()] + tag + html[m.end():]
+                    html = html[:m.end()] + ins + html[m.end():]
                 else:
-                    html = tag + html
-        import re as _re148
+                    html = ins + html
         new = _Resp148(content=html, status_code=resp.status_code,
                        media_type=resp.media_type or "text/html")
         for k, v in resp.headers.items():
