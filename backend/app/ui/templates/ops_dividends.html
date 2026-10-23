@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Дивиденды · Пульт</title>
+<style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}
+h1{font-size:22px}h2{font-size:16px;color:#d29922;margin-top:26px}
+table{border-collapse:collapse;margin-top:10px;font-size:13px}td,th{padding:6px 10px;border-bottom:1px solid #21262d;color:#9da7b3}
+input,select{padding:8px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3}
+button{padding:9px 18px;border:0;border-radius:8px;background:#d29922;color:#111;font-weight:600;cursor:pointer}
+.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-top:12px}
+.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.ok{color:#3fb950}small{color:#6e7681}</style></head>
+<body>
+<div class="nav"><a href="/admin-ops/">← Пульт</a><a href="/admin-ops/promo">Промо →</a></div>
+<h1>💰 Дивиденды и партнёры</h1>
+{% if msg %}<p class="ok">✓ {{ msg }}</p>{% endif %}
+<div class="card">
+<h2>Пу дивидендов</h2>
+<form method="post" action="/admin-ops/dividends/settings">
+<label>Процент выручки в пул (0 — выключить): <input name="dividend_pool_percent" value="{{ pool_percent }}" size="4"></label>
+<button>Сохранить</button>
+</form>
+<p><small>Каждую ночь в 00:05 пул распределяется между партнёрами пропорционально их доле и зачисляется на их балансы. Владелец платформы — такой же партнёр: добавь себя один раз с долей 100% (или меньше, если есть инвесторы).</small></p>
+</div>
+<div class="card">
+<h2>Партнёры / инвесторы</h2>
+<form method="post" action="/admin-ops/dividends/partners">
+<label>Email пользователя (или пусто для внешнего инвестора): <input name="email"></label>
+<label>Наименование: <input name="title" placeholder="Иванов И.И. / ООО Ромашка"></label>
+<label>Вложено, ₽: <input name="invested" value="0"></label>
+<label>Доля пула, %: <input name="share" value="100" size="4"></label>
+<button>Добавить партнёра</button>
+</form>
+<table><tr><th>id</th><th>кто</th><th>вложено ₽</th><th>доля %</th><th>статус</th></tr>
+{% for p in partners %}<tr><td>{{ p.id }}</td><td>{{ p.title }}</td><td>{{ (p.invested_minor or 0)/100 }}</td><td>{{ p.share_percent }}</td><td>{{ p.status }}</td></tr>{% endfor %}</table>
+</div>
+<div class="card">
+<h2>Начисления (последние 60)</h2>
+<table><tr><th>дата</th><th>партнёр</th><th>выручка ₽</th><th>пул ₽</th><th>начислено ₽</th></tr>
+{% for a in accruals %}<tr><td>{{ a.period }}</td><td>{{ a.partner_id }}</td><td>{{ (a.revenue_minor or 0)/100 }}</td><td>{{ (a.pool_minor or 0)/100 }}</td><td>{{ (a.amount_minor or 0)/100 }}</td></tr>{% endfor %}</table>
+</div>
+<div class="card">
+<h2>Заявки на вывод</h2>
+<table><tr><th>id</th><th>партнёр</th><th>сумма ₽</th><th>реквизиты</th><th>статус</th><th>действия</th></tr>
+{% for r in payouts %}<tr><td>{{ r.id }}</td><td>{{ r.partner_id }}</td><td>{{ (r.amount_minor or 0)/100 }}</td><td>{{ r.requisites }}</td><td>{{ r.status }}</td>
+<td>{% if r.status == "pending" %}
+<form style="display:inline" method="post" action="/admin-ops/dividends/payouts/{{ r.id }}/approve"><button>Выплатил</button></form>
+<form style="display:inline" method="post" action="/admin-ops/dividends/payouts/{{ r.id }}/reject"><button style="background:#da3633;color:#fff">Отклонить</button></form>
+{% endif %}</td></tr>{% endfor %}</table>
+<p><small>Выплату в реальные деньги проводишь вручную (перевод на карту/счёт), затем жми «Выплатил» — система спишет сумму с баланса партнёра и зафиксирует проводку «Выплата дивидендов по реквизитам».</small></p>
+</div>
+</body></html>

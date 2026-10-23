@@ -1478,3 +1478,105 @@ def ledger_clean138(request: Request, days: str = Form("90"),
 from app.core.labels import finalize_human as _fh141
 templates.env.finalize = _fh141
 _t138.env.finalize = _fh141
+
+
+# ================= v143: Дивиденды (admin-ops) =================
+@router.get("/dividends", response_class=HTMLResponse)
+def dividends_page(request: Request, msg: str = "", db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.services import dividends as dv
+    dv.ensure_tables()
+    from app.core.settings_svc import get_setting as _gs
+    partners = db.execute(select(dv.PartnerShare).order_by(dv.PartnerShare.id)).scalars().all()
+    accruals = db.execute(select(dv.DividendAccrual).order_by(dv.DividendAccrual.id.desc()).limit(60)).scalars().all()
+    payouts = db.execute(select(dv.PayoutRequest).order_by(dv.PayoutRequest.id.desc()).limit(60)).scalars().all()
+    return _t138.TemplateResponse(request, "ops_dividends.html", {
+        "user": u, "msg": msg,
+        "pool_percent": _gs(db, "dividend_pool_percent", "30"),
+        "partners": partners, "accruals": accruals, "payouts": payouts})
+
+@router.post("/dividends/settings")
+async def dividends_settings(request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    form = await request.form()
+    from app.core.settings_svc import set_setting as _ss
+    v = (form.get("dividend_pool_percent") or "30").strip()
+    try:
+        v = str(max(0, min(100, int(v))))
+    except ValueError:
+        v = "30"
+    _ss(db, "dividend_pool_percent", v)
+    db.commit()
+    return RedirectResponse("/admin-ops/dividends?msg=settings-ok", status_code=303)
+
+@router.post("/dividends/partners")
+async def dividends_partner_add(request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    form = await request.form()
+    from app.services import dividends as dv
+    dv.ensure_tables()
+    from app.models import User
+    from app.core.security import normalize_email
+    email = (form.get("email") or "").strip()
+    uid = None
+    if email:
+        usr = db.execute(select(User).where(User.email == normalize_email(email))).scalar_one_or_none()
+        uid = usr.id if usr else None
+    db.add(dv.PartnerShare(
+        user_id=uid,
+        title=(form.get("title") or email or "Партнёр").strip()[:120],
+        invested_minor=int((form.get("invested") or "0").replace(".", "").replace(",", ".") and
+                           float((form.get("invested") or "0").replace(",", ".")) * 100 or 0),
+        share_percent=max(0, min(100, int(form.get("share") or 0))),
+        status="active"))
+    db.commit()
+    return RedirectResponse("/admin-ops/dividends?msg=partner-ok", status_code=303)
+
+@router.post("/dividends/payouts/{pid}/approve")
+def dividend_payout_approve(pid: int, request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.services import dividends as dv
+    pr = db.get(dv.PayoutRequest, pid)
+    if pr is not None and pr.status == "pending":
+        partner = db.get(dv.PartnerShare, pr.partner_id)
+        if partner is not None and partner.user_id:
+            from app.models import User
+            usr = db.get(User, partner.user_id)
+            if usr is not None:
+                w = ledger.get_wallet(db, usr.id)
+                try:
+                    ledger.debit(db, w, pr.amount_minor, reason="dividend_payout",
+                                 entity_type="payout", entity_id=pr.id,
+                                 idempotency_key=f"payout:{pr.id}")
+                except Exception:
+                    return RedirectResponse("/admin-ops/dividends?msg=payout-no-funds", status_code=303)
+        pr.status = "paid"
+        from app.core.tz import now as _n
+        pr.paid_at = _n()
+        db.commit()
+    return RedirectResponse("/admin-ops/dividends?msg=payout-ok", status_code=303)
+
+@router.post("/dividends/payouts/{pid}/reject")
+def dividend_payout_reject(pid: int, request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.services import dividends as dv
+    pr = db.get(dv.PayoutRequest, pid)
+    if pr is not None and pr.status == "pending":
+        pr.status = "rejected"
+        db.commit()
+    return RedirectResponse("/admin-ops/dividends?msg=payout-rejected", status_code=303)

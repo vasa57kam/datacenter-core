@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.core.config import settings
-from app.services import provisioning, sync, usage, usage_agent
+from app.services import dividends, provisioning, sync, usage, usage_agent
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,11 @@ def recover_job():
 @scheduler.scheduled_job("interval", seconds=settings.provisioning_interval_seconds, coalesce=True, max_instances=1)
 def provisioning_job():
     provisioning.process_pending_tasks_sync()
+
+@scheduler.scheduled_job("cron", hour=0, minute=5, coalesce=True, max_instances=1)
+def dividend_job():
+    from app.services import dividends
+    dividends.accrue_yesterday()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Мои дивиденды · ITKAM34</title>
+<style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}
+h1{font-size:20px}table{border-collapse:collapse;margin-top:10px;font-size:13px}td,th{padding:6px 10px;border-bottom:1px solid #21262d;color:#9da7b3}
+input{padding:9px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3;width:320px}
+button{margin-top:12px;padding:10px 22px;border:0;border-radius:8px;background:#238636;color:#fff;cursor:pointer}
+.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-top:12px}
+.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.ok{color:#3fb950}.warn{color:#ffa198}small{color:#6e7681}</style></head>
+<body>
+<div class="nav"><a href="/lk/">← Кабинет</a></div>
+<h1>💰 Мои дивиденды</h1>
+{% if msg == "request-ok" %}<p class="ok">✓ Заявка на вывод создана — администратор проведёт выплату</p>{% endif %}
+{% if msg == "bad-amount" %}<p class="warn">Проверь сумму: она не должна превышать баланс</p>{% endif %}
+{% if msg == "not-partner" %}<p class="warn">Ты пока не партнёр платформы</p>{% endif %}
+{% if not me %}
+<div class="card"><p>Партнёрская программа: вкладывайся в инфраструктуру платформы и получай долю дохода каждый день.
+Подробности и договор — в «Поддержке».</p></div>
+{% else %}
+<div class="card"><b>Мои доли:</b>
+{% for p in me %}<p>{{ p.title }} — доля пула {{ p.share_percent }}%, вложено {{ (p.invested_minor or 0)/100 }} ₽</p>{% endfor %}</div>
+<div class="card"><h3>Начисления</h3>
+<table><tr><th>дата</th><th>выручка платформы ₽</th><th>мне начислено ₽</th></tr>
+{% for a in accruals %}<tr><td>{{ a.period }}</td><td>{{ (a.revenue_minor or 0)/100 }}</td><td class="ok">{{ (a.amount_minor or 0)/100 }}</td></tr>{% endfor %}</table></div>
+<div class="card"><h3>Вывод в реальные деньги</h3>
+<form method="post" action="/lk/dividends/payout">
+<label>Сумма, ₽: <input name="amount" value="100"></label>
+<label>Реквизиты (карта/счёт): <input name="requisites" placeholder="+7 900 000-00-00"></label>
+<button>Создать заявку на вывод</button>
+</form>
+<p><small>Сумма списывается с баланса сразу при одобрении; перевод на реквизиты администратор выполняет вручную в течение 1 рабочего дня.</small></p>
+<table><tr><th>id</th><th>сумма ₽</th><th>статус</th></tr>
+{% for r in payouts %}<tr><td>{{ r.id }}</td><td>{{ (r.amount_minor or 0)/100 }}</td><td>{{ r.status }}</td></tr>{% endfor %}</table></div>
+{% endif %}
+</body></html>

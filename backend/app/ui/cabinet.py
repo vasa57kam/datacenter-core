@@ -973,3 +973,45 @@ def ledger_admin_delete(request: Request, days: str = Form("90"),
 
 from app.core.labels import finalize_human as _fh141
 templates.env.finalize = _fh141
+
+
+@router.get("/dividends", response_class=HTMLResponse)
+def my_dividends(request: Request, msg: str = "", db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    from app.services import dividends as dv
+    dv.ensure_tables()
+    me = db.execute(select(dv.PartnerShare).where(dv.PartnerShare.user_id == user.id,
+                                                  dv.PartnerShare.status == "active")).scalars().all()
+    accruals, payouts = [], []
+    if me:
+        ids = [p.id for p in me]
+        accruals = db.execute(select(dv.DividendAccrual).where(dv.DividendAccrual.partner_id.in_(ids))
+                              .order_by(dv.DividendAccrual.id.desc()).limit(60)).scalars().all()
+        payouts = db.execute(select(dv.PayoutRequest).where(dv.PayoutRequest.partner_id.in_(ids))
+                             .order_by(dv.PayoutRequest.id.desc()).limit(20)).scalars().all()
+    return templates.TemplateResponse(request, "lk/dividends.html",
+                                      {"user": user, "me": me, "accruals": accruals,
+                                       "payouts": payouts, "msg": msg})
+
+@router.post("/dividends/payout")
+def my_dividend_payout(request: Request, amount: str = Form(""), requisites: str = Form(""),
+                       db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    from app.services import dividends as dv
+    dv.ensure_tables()
+    partner = db.execute(select(dv.PartnerShare).where(dv.PartnerShare.user_id == user.id,
+                                                       dv.PartnerShare.status == "active")).scalars().first()
+    if partner is None:
+        return RedirectResponse("/lk/dividends?msg=not-partner", status_code=303)
+    minor = parse_rub(amount)
+    wallet = ledger.get_wallet(db, user.id)
+    if minor <= 0 or minor > (wallet.balance_minor or 0):
+        return RedirectResponse("/lk/dividends?msg=bad-amount", status_code=303)
+    db.add(dv.PayoutRequest(partner_id=partner.id, amount_minor=minor,
+                            requisites=requisites.strip()[:300]))
+    db.commit()
+    return RedirectResponse("/lk/dividends?msg=request-ok", status_code=303)

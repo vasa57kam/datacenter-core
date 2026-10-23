@@ -14,6 +14,8 @@ REASON_RU = {
     "service_activation_month": "Активация месячного тарифа",
     "service_activation_one_time": "Разовая оплата услуги",
     "adjustment": "Корректировка баланса",
+    "dividend_accrual": "Начисление дивидендов",
+    "dividend_payout": "Выплата дивидендов по реквизитам",
     "refund": "Возврат средств",
 }
 METHOD_RU = {"cash": "наличные", "transfer": "перевод на карту", "other": "другое"}
