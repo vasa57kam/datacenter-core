@@ -1397,7 +1397,8 @@ _PROMO138 = [
     ("referral_reward_minor", "Награда за реферала, копеек (0 — выключена)", "5000"),
     ("auto_approve_enabled", "Доверительный лимит: включён (1/0)", "1"),
     ("auto_approve_limit_minor", "Доверительный лимит, копеек", "50000"),
-    ("auto_approve_max_uses", "Доверительный лимит: использований на кошелёк", "1"),
+    ("auto_approve_max_uses", "Доверительный лимит: использований на кошелёк", "1"),    ("invest_share_price_minor", "Цена 1% доли пула для инвесторов, копеек", "1000000"),
+
 ]
 
 def _cnt138(db, d, kind):
@@ -1493,9 +1494,16 @@ def dividends_page(request: Request, msg: str = "", db: Session = Depends(get_db
     partners = db.execute(select(dv.PartnerShare).order_by(dv.PartnerShare.id)).scalars().all()
     accruals = db.execute(select(dv.DividendAccrual).order_by(dv.DividendAccrual.id.desc()).limit(60)).scalars().all()
     payouts = db.execute(select(dv.PayoutRequest).order_by(dv.PayoutRequest.id.desc()).limit(60)).scalars().all()
+    from datetime import timedelta as _td147
+    from app.core.tz import now as _now147
+    _t0 = _now147().replace(hour=0, minute=0, second=0, microsecond=0)
+    _rev = dv.revenue_for(db, _t0 - _td147(days=1), _t0)
+    _pp = int(_gs(db, "dividend_pool_percent", "30") or 0)
+    _tot = sum(p.share_percent or 0 for p in partners if p.status == "active")
     return _t138.TemplateResponse(request, "ops_dividends.html", {
         "user": u, "msg": msg,
         "pool_percent": _gs(db, "dividend_pool_percent", "30"),
+        "calc": {"revenue": _rev, "pool": _rev * _pp // 100, "total_shares": _tot},
         "partners": partners, "accruals": accruals, "payouts": payouts})
 
 @router.post("/dividends/settings")
@@ -1593,3 +1601,67 @@ def ads_toggle144(request: Request, db: Session = Depends(get_db)):
     _s(db, "invest_ads_enabled", "0" if cur == "1" else "1")
     db.commit()
     return RedirectResponse("/admin-ops/", status_code=303)
+
+
+@router.post("/dividends/partners/{pid}/toggle")
+def partner_toggle147(pid: int, request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.services import dividends as dv
+    p = db.get(dv.PartnerShare, pid)
+    if p is not None:
+        p.status = "disabled" if p.status == "active" else "active"
+        db.commit()
+    return RedirectResponse("/admin-ops/dividends?msg=partner-toggled", status_code=303)
+
+@router.post("/dividends/partners/{pid}/delete")
+def partner_delete147(pid: int, request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.services import dividends as dv
+    p = db.get(dv.PartnerShare, pid)
+    if p is not None:
+        db.delete(p)
+        db.commit()
+    return RedirectResponse("/admin-ops/dividends?msg=partner-deleted", status_code=303)
+
+@router.get("/docs", response_class=HTMLResponse)
+def ops_docs_page(request: Request, msg: str = "", db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.core.settings_svc import get_setting as _g
+    docs = {}
+    for key, path in (("offer", "docs/legal/offer_template.md"),
+                      ("terms", "docs/legal/terms.md"),
+                      ("privacy", "docs/legal/privacy.md"),
+                      ("dividends", "docs/dividends.md")):
+        val = _g(db, "doc_" + key, "") or ""
+        if not val:
+            try:
+                val = open(path).read()
+            except OSError:
+                val = ""
+        docs[key] = val
+    return _t138.TemplateResponse(request, "ops_docs.html",
+                                  {"user": u, "msg": msg, "docs": docs})
+
+@router.post("/docs")
+async def ops_docs_save(request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    form = await request.form()
+    from app.core.settings_svc import set_setting as _s
+    for key in ("offer", "terms", "privacy", "dividends"):
+        v = form.get("doc_" + key)
+        if v is not None:
+            _s(db, "doc_" + key, str(v))
+    db.commit()
+    return RedirectResponse("/admin-ops/docs?msg=saved", status_code=303)

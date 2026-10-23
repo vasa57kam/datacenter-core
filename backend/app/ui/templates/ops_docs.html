@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Документы · Пульт</title></head>
+<body style="padding:24px">
+<div class="legal-links"><a href="/admin-ops/">← Пульт</a> <a href="/admin-ops/dividends">Дивиденды →</a></div>
+<h1>📄 Юридические документы (публичные страницы)</h1>
+{% if msg %}<p style="color:#3fb950">✓ Сохранено и опубликовано</p>{% endif %}
+<form method="post" action="/admin-ops/docs">
+<h2>Оферта (/legal/offer)</h2>
+<textarea name="doc_offer" rows="10" style="width:100%">{{ docs.offer }}</textarea>
+<h2>Лицензионное соглашение (/legal/terms)</h2>
+<textarea name="doc_terms" rows="10" style="width:100%">{{ docs.terms }}</textarea>
+<h2>Персональные данные (/legal/privacy)</h2>
+<textarea name="doc_privacy" rows="10" style="width:100%">{{ docs.privacy }}</textarea>
+<h2>Инвесторам: как считаются дивиденды (/dividends-how)</h2>
+<textarea name="doc_dividends" rows="10" style="width:100%">{{ docs.dividends }}</textarea>
+<button style="margin-top:14px">Сохранить и опубликовать</button>
+</form>
+<p><small>Тексты хранятся в базе и публикуются мгновенно; файлы репозитория — резерв, если настройка пуста.</small></p>
+</body></html>

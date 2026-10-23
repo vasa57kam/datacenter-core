@@ -33,6 +33,7 @@ def approve_payreq(db, pr, actor_email: str = "system") -> None:
         ledger.credit(db, wallet, bonus, reason="topup_cashback",
                       entity_type="payment_request", entity_id=pr.id,
                       idempotency_key=f"cashback:{pr.id}")
+    _activate_pending_partner147(db, pr)
     from app.models import User
     user = db.get(User, pr.user_id)
     _rr = _ref_reward(db)
@@ -42,3 +43,26 @@ def approve_payreq(db, pr, actor_email: str = "system") -> None:
                       entity_type="user", entity_id=user.id,
                       idempotency_key=f"referral:{user.id}")
     notify_admin(db, f"✅ Заявка #{pr.id}: {(pr.amount_minor/100):.0f} ₽ зачислено ({pr.method}, одобрил: {actor_email})")
+
+
+def _activate_pending_partner147(db, pr) -> None:
+    """Инвестор в статусе pending становится active, когда одобранные пополнения
+    с момента регистрации набрали заявленную сумму вложения."""
+    try:
+        from sqlalchemy import select as _sel
+        from app.services.dividends import PartnerShare, ensure_tables
+        ensure_tables()
+        p = db.execute(_sel(PartnerShare).where(
+            PartnerShare.user_id == pr.user_id,
+            PartnerShare.status == "pending")).scalars().first()
+        if p is None:
+            return
+        from app.models import PaymentRequest
+        total = sum(r.amount_minor or 0 for r in db.execute(_sel(PaymentRequest).where(
+            PaymentRequest.user_id == pr.user_id,
+            PaymentRequest.status == "approved",
+            PaymentRequest.created_at >= p.created_at)).scalars().all())
+        if total >= (p.invested_minor or 0):
+            p.status = "active"
+    except Exception:
+        pass

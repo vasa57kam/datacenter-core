@@ -1,46 +1,36 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>Инвесторам · ITKAM34</title>
-<link rel="stylesheet" href="/assets/theme.css"></head>
-<body style="padding:24px"><!--theme146--><style>
-:root{--bg:#0d1117;--panel:#161b22;--line:#21262d;--txt:#e6edf3;--mut:#9da7b3;--grn:#238636;--grn2:#3fb950;--yel:#d29922;--red:#da3633;--rad:12px}
-body{background:var(--bg)!important;color:var(--txt)!important;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif!important;margin:0}
-a{color:#58a6ff}
-table{border-collapse:collapse;width:100%}
-td,th{padding:8px 10px;border-bottom:1px solid var(--line);color:var(--mut);font-size:13px}
-th{color:var(--txt);text-align:left}
-button,input,select,textarea{border-radius:10px;border:1px solid var(--line);background:#0f141b;color:var(--txt);padding:9px 12px;font:inherit}
-button{background:var(--grn);border:0;color:#fff;font-weight:600;cursor:pointer}
-button:hover{filter:brightness(1.12)}
-.card,section{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px;margin:12px 0}
-.invest-ads{border-color:var(--yel);background:linear-gradient(180deg,#161b22,#1a1710)}
-.invest-ads a{color:var(--yel)}
-.legal-links{margin:18px 0;color:var(--mut);font-size:13px}
-.legal-links a{color:var(--mut)}
-.quick-tiles a{margin-right:14px;color:var(--yel);text-decoration:none;font-weight:600}
-
-.card{box-shadow:0 8px 24px #00000066}
-h1{font-size:24px;margin:8px 0}h2{font-size:18px;margin:16px 0 8px}
-a{text-decoration:none}a:hover{text-decoration:underline}
-body{background:#0b0f14!important}
-.topbar146{display:none}
-</style>{% if invest_ads %}<div class="card invest-ads">💸 <b>Инвестируйте в платформу</b> — ежедневные дивиденды с дохода облачных услуг. <a href="/invest">Условия и вход →</a> · <a href="/dividends-how">Как считается</a></div>{% endif %}{% if my_div %}<div class="card">💰 Вы партнёр платформы: доля {{ my_div.share }}% пула · начислено всего {{ (my_div.total/100)|round(2) }} ₽ · последнее начисление {{ (my_div.last/100)|round(2) }} ₽ · <a href="/lk/dividends">Мои дивиденды и вывод</a></div>{% endif %}
+<html lang="ru"><head><meta charset="utf-8"><title>Инвесторам · ITKAM34</title></head>
+<body style="padding:24px">
 <div class="legal-links"><a href="/">← На главную</a></div>
-<div class="card" style="max-width:560px;margin:40px auto">
-<h1>💸 Кабинет инвестора ITKAM34</h1>
-<p>Платформа распределяет часть дохода облачных услуг между партнёрами <b>каждый день</b>:
-прозрачная формула пула, журнал начислений и вывод средств по заявке за 1 рабочий день.</p>
-<li>Доход начисляется автоматически и виден в личном кабинете</li>
-<li>Формула пула и все начисления — открыты в отчётах</li>
-<li>Вывод — по заявке на ваши реквизиты</li>
+<div class="card" style="max-width:640px;margin:30px auto">
+<h1>💸 Инвесторам платформы ITKAM34</h1>
+<p>Вкладывайтесь в инфраструктуру облачных услуг и получайте долю дохода <b>каждый день</b>:
+пул = процент выручки платформы, делится между партнёрами пропорционально долям.</p>
+<li>Цена 1% доли пула: <b>{{ share_price }} ₽</b> (например, взнос {{ share_price * 10 }} ₽ = 10% пула)</li>
+<li>Статус инвестора включается автоматически, когда ваши пополнения набирают заявленную сумму</li>
+<li>Начисления и вывод — прямо в личном кабинете, без отдельных интерфейсов</li>
+<li>Доход не гарантирован и зависит от фактической выручки; отношения оформляются партнёрским договором</li>
+{% if ok %}<p style="color:#3fb950">✓ Аккаунт инвестора создан! Войдите и пополните баланс на сумму взноса —
+статус партнёра включится автоматически после одобрения заявок.</p>{% endif %}
 {% if error == "1" %}<p style="color:#ffa198">Неверный email или пароль</p>{% endif %}
-{% if error == "2" %}<p style="color:#ffa198">Доступ инвестора выдаёт администратор:
-напишите в «Поддержку» или добавьте партнёра в пульте → «Дивиденды»</p>{% endif %}
-<form method="post" action="/invest" style="margin-top:16px">
+{% if error == "2" %}<p style="color:#ffa198">Доступ инвестора выдаёт администратор</p>{% endif %}
+{% if error == "3" %}<p style="color:#ffa198">Проверьте форму: email и пароль от 8 символов</p>{% endif %}
+{% if error == "4" %}<p style="color:#ffa198">Такой email уже зарегистрирован — войдите</p>{% endif %}
+{% if error == "5" %}<p style="color:#ffa198">Минимальный взнос — цена 1% доли ({{ share_price }} ₽)</p>{% endif %}
+<h2>Вход для инвестора</h2>
+<form method="post" action="/invest">
 <label>Email <input name="email" type="email" required style="width:100%"></label>
 <label>Пароль <input name="password" type="password" required style="width:100%"></label>
-<button type="submit" style="width:100%;margin-top:14px">Войти в кабинет инвестора</button>
+<button type="submit" style="width:100%;margin-top:12px">Войти</button>
 </form>
-<p><small>Партнёрские отношения оформляются договором (см. «Документы» на главной).
-Доход не гарантирован и зависит от фактической выручки платформы.</small></p>
+<h2>Регистрация как инвестор</h2>
+<form method="post" action="/invest/register">
+<label>Email <input name="email" type="email" required style="width:100%"></label>
+<label>Пароль (мин. 8 символов) <input name="password" type="password" required style="width:100%"></label>
+<label>Сумма вложения, ₽ <input name="invested" value="10000" required style="width:100%"></label>
+<button type="submit" style="width:100%;margin-top:12px;background:#d29922;color:#111">Зарегистрироваться как инвестор</button>
+</form>
+<p><small>Регистрируясь, вы принимаете оферту и соглашение об обработке персональных данных
+(ссылки внизу страницы). Партнёрский договор предоставляется по запросу в «Поддержке».</small></p>
 </div>
-<div class="legal-links" style="text-align:center;padding:14px"><a href="/legal/offer">Оферта</a> · <a href="/legal/terms">Лицензионное соглашение</a> · <a href="/legal/privacy">Персональные данные</a> · <a href="/dividends-how">Инвесторам: как считаются дивиденды</a></div></body></html>
+</body></html>

@@ -208,15 +208,18 @@ def theme_css():
 
 
 @public_router.get("/legal/{name}", response_class=HTMLResponse)
-def legal_page(name: str, request: Request):
+def legal_page(name: str, request: Request, db: Session = Depends(get_db)):
     import os as _os
     if name not in ("offer", "terms", "privacy"):
         raise HTTPException(status_code=404)
     path = _os.path.join("docs", "legal", f"{name}.md")
-    try:
-        md = open(path).read()
-    except OSError:
-        md = "Документ готовится к публикации."
+    from app.core.settings_svc import get_setting as _gsdoc
+    md = _gsdoc(db, "doc_" + name, "") or ""
+    if not md:
+        try:
+            md = open(path).read()
+        except OSError:
+            md = "Документ готовится к публикации."
     out = []
     for line in md.splitlines():
         line = line.rstrip()
@@ -237,8 +240,11 @@ def legal_page(name: str, request: Request):
 
 
 @public_router.get("/invest", response_class=HTMLResponse)
-def invest_page(request: Request, error: str = ""):
-    return templates.TemplateResponse(request, "lk/invest.html", {"error": error})
+def invest_page(request: Request, error: str = "", ok: str = "",
+                db: Session = Depends(get_db)):
+    price = int(_gs144(db, "invest_share_price_minor", "1000000") or 1000000)
+    return templates.TemplateResponse(request, "lk/invest.html",
+                                      {"error": error, "ok": ok, "share_price": price / 100})
 
 
 @public_router.post("/invest")
@@ -1107,6 +1113,9 @@ def _md_page146(path: str, title: str):
         md = open(path).read()
     except OSError:
         md = "Документ готовится к публикации."
+    return _md_page146_text(md, title)
+
+def _md_page146_text(md: str, title: str):
     out = []
     for line in md.splitlines():
         line = line.rstrip()
@@ -1124,5 +1133,43 @@ def _md_page146(path: str, title: str):
                         "<div class=card>" + "".join(out) + "</div></body></html>")
 
 @public_router.get("/dividends-how", response_class=HTMLResponse)
-def dividends_how(request: Request):
-    return _md_page146("docs/dividends.md", "Как рассчитываются дивиденды")
+def dividends_how(request: Request, db: Session = Depends(get_db)):
+    from app.core.settings_svc import get_setting as _gsdoc
+    md = _gsdoc(db, "doc_dividends", "") or ""
+    if not md:
+        try:
+            md = open("docs/dividends.md").read()
+        except OSError:
+            md = "Документ готовится."
+    return _md_page146_text(md, "Как рассчитываются дивиденды")
+
+
+@public_router.post("/invest/register")
+def invest_register(request: Request, email: str = Form(), password: str = Form(),
+                    invested: str = Form(""), db: Session = Depends(get_db)):
+    import uuid as _uuid
+    from app.services import dividends as dv
+    from app.models import PartnerShare
+    dv.ensure_tables()
+    email = security.normalize_email(email)
+    if "@" not in email or len(password) < 8:
+        return RedirectResponse("/invest?error=3", status_code=303)
+    if db.execute(select(User).where(func.lower(User.email) == email)).scalar_one_or_none():
+        return RedirectResponse("/invest?error=4", status_code=303)
+    price = int(_gs144(db, "invest_share_price_minor", "1000000") or 1000000)
+    minor = parse_rub(invested)
+    if minor < price:
+        return RedirectResponse("/invest?error=5", status_code=303)
+    share = max(1, minor // price)
+    ip = request.client.host if request.client else ""
+    user = User(email=email, password_hash=security.hash_password(password),
+                referral_code=_uuid.uuid4().hex[:10], register_ip=ip or None,
+                status="active")
+    db.add(user)
+    db.flush()
+    ledger.get_wallet(db, user.id)
+    db.add(PartnerShare(user_id=user.id, title=email, invested_minor=minor,
+                        share_percent=share, status="pending"))
+    db.commit()
+    notify_admin(db, f"🧾 Новый инвестор: {email}, взнос {(minor/100):.0f} ₽, доля {share}% — станет активным после оплаты")
+    return RedirectResponse("/invest?ok=1", status_code=303)

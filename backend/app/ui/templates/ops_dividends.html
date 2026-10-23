@@ -1,71 +1,45 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>Дивиденды · Пульт</title>
-<style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}
-h1{font-size:22px}h2{font-size:16px;color:#d29922;margin-top:26px}
-table{border-collapse:collapse;margin-top:10px;font-size:13px}td,th{padding:6px 10px;border-bottom:1px solid #21262d;color:#9da7b3}
-input,select{padding:8px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3}
-button{padding:9px 18px;border:0;border-radius:8px;background:#d29922;color:#111;font-weight:600;cursor:pointer}
-.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-top:12px}
-.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.ok{color:#3fb950}small{color:#6e7681}</style><link rel="stylesheet" href="/assets/theme.css"></head>
-<body><!--theme146--><style>
-:root{--bg:#0d1117;--panel:#161b22;--line:#21262d;--txt:#e6edf3;--mut:#9da7b3;--grn:#238636;--grn2:#3fb950;--yel:#d29922;--red:#da3633;--rad:12px}
-body{background:var(--bg)!important;color:var(--txt)!important;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif!important;margin:0}
-a{color:#58a6ff}
-table{border-collapse:collapse;width:100%}
-td,th{padding:8px 10px;border-bottom:1px solid var(--line);color:var(--mut);font-size:13px}
-th{color:var(--txt);text-align:left}
-button,input,select,textarea{border-radius:10px;border:1px solid var(--line);background:#0f141b;color:var(--txt);padding:9px 12px;font:inherit}
-button{background:var(--grn);border:0;color:#fff;font-weight:600;cursor:pointer}
-button:hover{filter:brightness(1.12)}
-.card,section{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px;margin:12px 0}
-.invest-ads{border-color:var(--yel);background:linear-gradient(180deg,#161b22,#1a1710)}
-.invest-ads a{color:var(--yel)}
-.legal-links{margin:18px 0;color:var(--mut);font-size:13px}
-.legal-links a{color:var(--mut)}
-.quick-tiles a{margin-right:14px;color:var(--yel);text-decoration:none;font-weight:600}
-
-.card{box-shadow:0 8px 24px #00000066}
-h1{font-size:24px;margin:8px 0}h2{font-size:18px;margin:16px 0 8px}
-a{text-decoration:none}a:hover{text-decoration:underline}
-body{background:#0b0f14!important}
-.topbar146{display:none}
-</style>{% if invest_ads %}<div class="card invest-ads">💸 <b>Инвестируйте в платформу</b> — ежедневные дивиденды с дохода облачных услуг. <a href="/invest">Условия и вход →</a> · <a href="/dividends-how">Как считается</a></div>{% endif %}{% if my_div %}<div class="card">💰 Вы партнёр платформы: доля {{ my_div.share }}% пула · начислено всего {{ (my_div.total/100)|round(2) }} ₽ · последнее начисление {{ (my_div.last/100)|round(2) }} ₽ · <a href="/lk/dividends">Мои дивиденды и вывод</a></div>{% endif %}
-<div class="nav"><a href="/admin-ops/">← Пульт</a><a href="/admin-ops/dividends">💰 Дивиденды</a><a href="/admin-ops/promo">Промо →</a></div>
+<html lang="ru"><head><meta charset="utf-8"><title>Дивиденды · Пульт</title></head>
+<body style="padding:24px">
+<div class="legal-links"><a href="/admin-ops/">← Пульт</a> <a href="/admin-ops/promo">Промо →</a> <a href="/admin-ops/docs">Документы →</a></div>
 <h1>💰 Дивиденды и партнёры</h1>
-{% if msg %}<p class="ok">✓ {{ msg }}</p>{% endif %}
+{% if msg %}<p style="color:#3fb950">✓ {{ msg }}</p>{% endif %}
 <div class="card">
-<h2>Пу дивидендов</h2>
+<h2>Как считается (прозрачно)</h2>
+<p>Выручка за вчера: <b>{{ (calc.revenue or 0)/100 }} ₽</b> → Пул ({{ pool_percent }}%): <b>{{ (calc.pool or 0)/100 }} ₽</b> → делится пропорционально долям активных партнёров (сумма долей: {{ calc.total_shares }}%).</p>
+<p><small>Если сумма долей больше 100 — пул всё равно делится пропорционально: переплата невозможна. Цена 1% доли для саморегистрации инвесторов задаётся в Промо.</small></p>
 <form method="post" action="/admin-ops/dividends/settings">
 <label>Процент выручки в пул (0 — выключить): <input name="dividend_pool_percent" value="{{ pool_percent }}" size="4"></label>
 <button>Сохранить</button>
 </form>
-<p><small>Каждую ночь в 00:05 пул распределяется между партнёрами пропорционально их доле и зачисляется на их балансы. Владелец платформы — такой же партнёр: добавь себя один раз с долей 100% (или меньше, если есть инвесторы).</small></p>
 </div>
 <div class="card">
 <h2>Партнёры / инвесторы</h2>
 <form method="post" action="/admin-ops/dividends/partners">
-<label>Email пользователя (или пусто для внешнего инвестора): <input name="email"></label>
+<label>Email пользователя (пусто = внешний): <input name="email"></label>
 <label>Наименование: <input name="title" placeholder="Иванов И.И. / ООО Ромашка"></label>
-<label>Вложено, ₽: <input name="invested" value="0"></label>
+<label>Вложено, ₽: <input name="invested" value="0" size="8"></label>
 <label>Доля пула, %: <input name="share" value="100" size="4"></label>
 <button>Добавить партнёра</button>
 </form>
-<table><tr><th>id</th><th>кто</th><th>вложено ₽</th><th>доля %</th><th>статус</th></tr>
-{% for p in partners %}<tr><td>{{ p.id }}</td><td>{{ p.title }}</td><td>{{ (p.invested_minor or 0)/100 }}</td><td>{{ p.share_percent }}</td><td>{{ p.status }}</td></tr>{% endfor %}</table>
+<table><tr><th>№</th><th>кто</th><th>вложено ₽</th><th>доля %</th><th>статус</th><th>действия</th></tr>
+{% for p in partners %}<tr><td>{{ p.id }}</td><td>{{ p.title }}</td><td>{{ (p.invested_minor or 0)/100 }}</td><td>{{ p.share_percent }}</td><td>{{ p.status }}</td>
+<td>
+<form style="display:inline" method="post" action="/admin-ops/dividends/partners/{{ p.id }}/toggle"><button style="background:#21262d">{% if p.status == "active" %}Выключить{% else %}Включить{% endif %}</button></form>
+<form style="display:inline" method="post" action="/admin-ops/dividends/partners/{{ p.id }}/delete" onsubmit="return confirm('Удалить партнёра? История начислений сохранится.')"><button style="background:#da3633">Удалить</button></form>
+</td></tr>{% endfor %}</table>
+<p><small>«ожидает» = инвестор зарегистрировался сам и ещё не внёс сумму: активируется автоматически после одобрения его пополнений на заявленную сумму (или кнопкой «Включить» вручную).</small></p>
 </div>
 <div class="card">
 <h2>Начисления (последние 60)</h2>
 <table><tr><th>дата</th><th>партнёр</th><th>выручка ₽</th><th>пул ₽</th><th>начислено ₽</th></tr>
-{% for a in accruals %}<tr><td>{{ a.period }}</td><td>{{ a.partner_id }}</td><td>{{ (a.revenue_minor or 0)/100 }}</td><td>{{ (a.pool_minor or 0)/100 }}</td><td>{{ (a.amount_minor or 0)/100 }}</td></tr>{% endfor %}</table>
+{% for a in accruals %}<tr><td>{{ a.period }}</td><td>{{ a.partner_id }}</td><td>{{ (a.revenue_minor or 0)/100 }}</td><td>{{ (a.pool_minor or 0)/100 }}</td><td style="color:#3fb950">{{ (a.amount_minor or 0)/100 }}</td></tr>{% endfor %}</table>
 </div>
 <div class="card">
 <h2>Заявки на вывод</h2>
-<table><tr><th>id</th><th>партнёр</th><th>сумма ₽</th><th>реквизиты</th><th>статус</th><th>действия</th></tr>
+<table><tr><th>№</th><th>партнёр</th><th>сумма ₽</th><th>реквизиты</th><th>статус</th><th>действия</th></tr>
 {% for r in payouts %}<tr><td>{{ r.id }}</td><td>{{ r.partner_id }}</td><td>{{ (r.amount_minor or 0)/100 }}</td><td>{{ r.requisites }}</td><td>{{ r.status }}</td>
-<td>{% if r.status == "pending" %}
-<form style="display:inline" method="post" action="/admin-ops/dividends/payouts/{{ r.id }}/approve"><button>Выплатил</button></form>
-<form style="display:inline" method="post" action="/admin-ops/dividends/payouts/{{ r.id }}/reject"><button style="background:#da3633;color:#fff">Отклонить</button></form>
-{% endif %}</td></tr>{% endfor %}</table>
-<p><small>Выплату в реальные деньги проводишь вручную (перевод на карту/счёт), затем жми «Выплатил» — система спишет сумму с баланса партнёра и зафиксирует проводку «Выплата дивидендов по реквизитам».</small></p>
+<td>{% if r.status == "pending" %}<form style="display:inline" method="post" action="/admin-ops/dividends/payouts/{{ r.id }}/approve"><button>Выплатил</button></form>
+<form style="display:inline" method="post" action="/admin-ops/dividends/payouts/{{ r.id }}/reject"><button style="background:#da3633">Отклонить</button></form>{% endif %}</td></tr>{% endfor %}</table>
 </div>
-<div class="legal-links" style="text-align:center;padding:14px"><a href="/legal/offer">Оферта</a> · <a href="/legal/terms">Лицензионное соглашение</a> · <a href="/legal/privacy">Персональные данные</a> · <a href="/dividends-how">Инвесторам: как считаются дивиденды</a></div></body></html>
+</body></html>
