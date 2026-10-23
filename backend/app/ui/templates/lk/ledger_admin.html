@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><title>Финансовый журнал · ITKAM34</title>
 <style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}h1{font-size:20px}table{border-collapse:collapse;margin-top:12px;font-size:13px}td,th{padding:5px 10px;border-bottom:1px solid #21262d;color:#9da7b3}td.neg{color:#f85149}td.pos{color:#3fb950}input,select{padding:8px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3}button{padding:10px 22px;border:0;border-radius:8px;background:#da3633;color:#fff;cursor:pointer}.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.warn{background:#2d1215;border:1px solid #f8514966;padding:12px;border-radius:8px;margin:14px 0;color:#ffa198}.msg{color:#3fb950}</style>
-</head><body>
+<link rel="stylesheet" href="/assets/theme.css"></head><body>
 <div class="nav"><a href="/lk/">← Кабинет</a><a href="/lk/promo">Промо и бонусы →</a></div>
 <h1>📒 Финансовый журнал: очистка</h1>
 {% if msg and msg.startswith("deleted") %}<p class="msg">✓ Удалено записей: {{ msg.split("-")[1] }}</p>{% endif %}

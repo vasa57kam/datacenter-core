@@ -21,6 +21,7 @@ from app.services import ledger
 from app.services.payments import approve_payreq
 from app.core.notifications import notify_admin
 from app.services.provisioning import enqueue_task
+from app.core.settings_svc import get_setting as _gs144
 
 router = APIRouter(prefix="/lk", tags=["lk"])
 public_router = APIRouter(tags=["public"])
@@ -194,6 +195,70 @@ def public_sub(sub_id: str, request: Request, db: Session = Depends(get_db)):
                              "subscription-userinfo": "upload=0; download=0; total=0; expire=0"})
 
 
+@public_router.get("/assets/theme.css")
+def theme_css():
+    from fastapi.responses import Response
+    import os as _os
+    path = _os.path.join("app", "ui", "theme.css")
+    try:
+        css = open(path).read()
+    except OSError:
+        css = ""
+    return Response(content=css, media_type="text/css", headers={"Cache-Control": "public, max-age=300"})
+
+
+@public_router.get("/legal/{name}", response_class=HTMLResponse)
+def legal_page(name: str, request: Request):
+    import os as _os
+    if name not in ("offer", "terms", "privacy"):
+        raise HTTPException(status_code=404)
+    path = _os.path.join("docs", "legal", f"{name}.md")
+    try:
+        md = open(path).read()
+    except OSError:
+        md = "Документ готовится к публикации."
+    out = []
+    for line in md.splitlines():
+        line = line.rstrip()
+        if line.startswith("## "):
+            out.append(f"<h2>{line[3:]}</h2>")
+        elif line.startswith("# "):
+            out.append(f"<h1>{line[2:]}</h1>")
+        elif line.startswith("- "):
+            out.append(f"<li>{line[2:]}</li>")
+        elif line.strip():
+            out.append(f"<p>{line}</p>")
+    body = "".join(out)
+    return HTMLResponse("<!doctype html><html lang=ru><head><meta charset=utf-8>"
+                        "<title>Документы · ITKAM34</title>"
+                        "<link rel=stylesheet href=/assets/theme.css></head><body>"
+                        f"<div class=legal-links><a href='/'>← На главную</a></div>"
+                        f"<div class=card>{body}</div></body></html>")
+
+
+@public_router.get("/invest", response_class=HTMLResponse)
+def invest_page(request: Request, error: str = ""):
+    return templates.TemplateResponse(request, "lk/invest.html", {"error": error})
+
+
+@public_router.post("/invest")
+def invest_login(request: Request, email: str = Form(), password: str = Form(),
+                 db: Session = Depends(get_db)):
+    from app.models import PartnerShare
+    email = security.normalize_email(email)
+    user = db.execute(select(User).where(func.lower(User.email) == email)).scalar_one_or_none()
+    if user is None or not security.verify_password(password, user.password_hash) or user.status != "active":
+        return RedirectResponse("/invest?error=1", status_code=303)
+    partner = db.execute(select(PartnerShare).where(PartnerShare.user_id == user.id,
+                                                    PartnerShare.status == "active")).scalars().first()
+    if partner is None and user.role != "admin":
+        return RedirectResponse("/invest?error=2", status_code=303)
+    request.session["uid"] = user.id
+    import time as _t
+    request.session["exp"] = int(_t.time()) + SESSION_LONG
+    return RedirectResponse("/lk/dividends", status_code=303)
+
+
 def _ip_risk(db, ip: str) -> bool:
     """Подозрительный IP: много регистраций за сутки / были блокировки / автоподтверждение уже использовали."""
     if not ip:
@@ -343,6 +408,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "user": user, "wallet": wallet,
         "entries": [_Friendly(e, _ENTRY_MAP) for e in entries],
         "pending_verify": user.status == "pending_verify",
+        "invest_ads": _gs144(db, "invest_ads_enabled", "1") == "1",
         "services": services,
         "payreqs": [_Friendly(pq, _PAYREQ_MAP) for pq in payreqs],
         "methods": _client_methods(db), "notes": _client_notes(db),

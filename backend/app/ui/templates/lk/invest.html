@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Инвесторам · ITKAM34</title>
+<link rel="stylesheet" href="/assets/theme.css"></head>
+<body style="padding:24px">
+<div class="legal-links"><a href="/">← На главную</a></div>
+<div class="card" style="max-width:560px;margin:40px auto">
+<h1>💸 Кабинет инвестора ITKAM34</h1>
+<p>Платформа распределяет часть дохода облачных услуг между партнёрами <b>каждый день</b>:
+прозрачная формула пула, журнал начислений и вывод средств по заявке за 1 рабочий день.</p>
+<li>Доход начисляется автоматически и виден в личном кабинете</li>
+<li>Формула пула и все начисления — открыты в отчётах</li>
+<li>Вывод — по заявке на ваши реквизиты</li>
+{% if error == "1" %}<p style="color:#ffa198">Неверный email или пароль</p>{% endif %}
+{% if error == "2" %}<p style="color:#ffa198">Доступ инвестора выдаёт администратор:
+напишите в «Поддержку» или добавьте партнёра в пульте → «Дивиденды»</p>{% endif %}
+<form method="post" action="/invest" style="margin-top:16px">
+<label>Email <input name="email" type="email" required style="width:100%"></label>
+<label>Пароль <input name="password" type="password" required style="width:100%"></label>
+<button type="submit" style="width:100%;margin-top:14px">Войти в кабинет инвестора</button>
+</form>
+<p><small>Партнёрские отношения оформляются договором (см. «Документы» на главной).
+Доход не гарантирован и зависит от фактической выручки платформы.</small></p>
+</div>
+</body></html>

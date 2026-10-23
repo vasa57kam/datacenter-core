@@ -1580,3 +1580,16 @@ def dividend_payout_reject(pid: int, request: Request, db: Session = Depends(get
         pr.status = "rejected"
         db.commit()
     return RedirectResponse("/admin-ops/dividends?msg=payout-rejected", status_code=303)
+
+
+@router.get("/ads/toggle")
+def ads_toggle144(request: Request, db: Session = Depends(get_db)):
+    from app.ui.cabinet import _current_user as _cu
+    u = _cu(db, request)
+    if u is None or u.role != "admin":
+        raise HTTPException(status_code=403)
+    from app.core.settings_svc import get_setting as _g, set_setting as _s
+    cur = _g(db, "invest_ads_enabled", "1")
+    _s(db, "invest_ads_enabled", "0" if cur == "1" else "1")
+    db.commit()
+    return RedirectResponse("/admin-ops/", status_code=303)
