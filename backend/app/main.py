@@ -70,3 +70,50 @@ setup_admin(app, secret_key=settings.jwt_secret)
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+import re
+
+# ---- v148: единая тема на все HTML-страницы (middleware) ----
+from starlette.middleware.base import BaseHTTPMiddleware as _BHM148
+from starlette.responses import Response as _Resp148
+
+_THEME_CACHE148 = {}
+
+def _theme148() -> str:
+    if "css" not in _THEME_CACHE148:
+        try:
+            _THEME_CACHE148["css"] = open("app/ui/theme.css").read()
+        except OSError:
+            _THEME_CACHE148["css"] = ""
+    return _THEME_CACHE148["css"]
+
+class Theme148Middleware(_BHM148):
+    async def dispatch(self, request, call_next):
+        resp = await call_next(request)
+        ctype = resp.headers.get("content-type", "")
+        if "text/html" not in ctype:
+            return resp
+        body = b""
+        async for chunk in resp.body_iterator:
+            body += chunk
+        html = body.decode("utf-8", "ignore")
+        if "<!--theme148-->" not in html:
+            tag = "<!--theme148--><style>" + _theme148() + "</style>"
+            if "</head>" in html:
+                html = html.replace("</head>", tag + "</head>", 1)
+            else:
+                m = re.search(r"<body[^>]*>", html)
+                if m:
+                    html = html[:m.end()] + tag + html[m.end():]
+                else:
+                    html = tag + html
+        import re as _re148
+        new = _Resp148(content=html, status_code=resp.status_code,
+                       media_type=resp.media_type or "text/html")
+        for k, v in resp.headers.items():
+            if k.lower() != "content-length":
+                new.headers[k] = v
+        return new
+
+app.add_middleware(Theme148Middleware)

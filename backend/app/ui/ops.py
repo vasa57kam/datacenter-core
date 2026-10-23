@@ -1192,7 +1192,7 @@ def ops_user_delete(uid: int, request: Request, db: Session = Depends(get_db)):
 def ops_rules(request: Request):
     r = _guard(request)
     if r: return r
-    return templates.TemplateResponse(request, "ops/rules.html", {})
+    return templates.TemplateResponse(request, "ops/rules.html", {"doc_text": _doc148(db, "rules"), })
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -1640,9 +1640,10 @@ def ops_docs_page(request: Request, msg: str = "", db: Session = Depends(get_db)
     for key, path in (("offer", "docs/legal/offer_template.md"),
                       ("terms", "docs/legal/terms.md"),
                       ("privacy", "docs/legal/privacy.md"),
-                      ("dividends", "docs/dividends.md")):
+                      ("dividends", "docs/dividends.md"),
+                      ("rules", ""), ("kassa", ""), ("help", "")):
         val = _g(db, "doc_" + key, "") or ""
-        if not val:
+        if not val and path:
             try:
                 val = open(path).read()
             except OSError:
@@ -1659,9 +1660,28 @@ async def ops_docs_save(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403)
     form = await request.form()
     from app.core.settings_svc import set_setting as _s
-    for key in ("offer", "terms", "privacy", "dividends"):
+    for key in ("offer", "terms", "privacy", "dividends", "rules", "kassa", "help"):
         v = form.get("doc_" + key)
         if v is not None:
             _s(db, "doc_" + key, str(v))
     db.commit()
     return RedirectResponse("/admin-ops/docs?msg=saved", status_code=303)
+
+
+def _doc148(db, key: str) -> str:
+    from app.core.settings_svc import get_setting as _g
+    md = _g(db, "doc_" + key, "") or ""
+    if not md:
+        return ""
+    out = []
+    for line in md.splitlines():
+        line = line.rstrip()
+        if line.startswith("## "):
+            out.append("<h2>" + line[3:] + "</h2>")
+        elif line.startswith("# "):
+            out.append("<h1>" + line[2:] + "</h1>")
+        elif line.startswith("- "):
+            out.append("<li>" + line[2:] + "</li>")
+        elif line.strip():
+            out.append("<p>" + line + "</p>")
+    return "".join(out)

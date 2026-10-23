@@ -43,7 +43,7 @@ body{background:#0b0f14!important}
 <div class="card">
 <form method="post" action="/admin-ops/promo">
 {% for k, label, d in keys %}
-<label>{{ label }} <small>· {{ k }}</small></label>
+<label>{{ label }}</label>
 <input name="{{ k }}" value="{{ vals[k] }}">
 {% endfor %}
 <button type="submit">Сохранить промо</button>
