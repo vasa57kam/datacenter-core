@@ -256,7 +256,7 @@ def invest_login(request: Request, email: str = Form(), password: str = Form(),
     request.session["uid"] = user.id
     import time as _t
     request.session["exp"] = int(_t.time()) + SESSION_LONG
-    return RedirectResponse("/lk/dividends", status_code=303)
+    return RedirectResponse("/lk/", status_code=303)
 
 
 def _ip_risk(db, ip: str) -> bool:
@@ -409,6 +409,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "entries": [_Friendly(e, _ENTRY_MAP) for e in entries],
         "pending_verify": user.status == "pending_verify",
         "invest_ads": _gs144(db, "invest_ads_enabled", "1") == "1",
+        "my_div": _my_div_summary(db, user),
         "services": services,
         "payreqs": [_Friendly(pq, _PAYREQ_MAP) for pq in payreqs],
         "methods": _client_methods(db), "notes": _client_notes(db),
@@ -1081,3 +1082,47 @@ def my_dividend_payout(request: Request, amount: str = Form(""), requisites: str
                             requisites=requisites.strip()[:300]))
     db.commit()
     return RedirectResponse("/lk/dividends?msg=request-ok", status_code=303)
+
+
+def _my_div_summary(db, user):
+    from app.services import dividends as dv
+    try:
+        dv.ensure_tables()
+        me = db.execute(select(dv.PartnerShare).where(
+            dv.PartnerShare.user_id == user.id,
+            dv.PartnerShare.status == "active")).scalars().first()
+        if me is None:
+            return None
+        rows = db.execute(select(dv.DividendAccrual).where(
+            dv.DividendAccrual.partner_id == me.id)).scalars().all()
+        last = rows[-1] if rows else None
+        return {"share": me.share_percent,
+                "last": (last.amount_minor if last else 0),
+                "total": sum(a.amount_minor or 0 for a in rows)}
+    except Exception:
+        return None
+
+def _md_page146(path: str, title: str):
+    try:
+        md = open(path).read()
+    except OSError:
+        md = "Документ готовится к публикации."
+    out = []
+    for line in md.splitlines():
+        line = line.rstrip()
+        if line.startswith("## "):
+            out.append("<h2>" + line[3:] + "</h2>")
+        elif line.startswith("# "):
+            out.append("<h1>" + line[2:] + "</h1>")
+        elif line.startswith("- "):
+            out.append("<li>" + line[2:] + "</li>")
+        elif line.strip():
+            out.append("<p>" + line + "</p>")
+    return HTMLResponse("<!doctype html><html lang=ru><head><meta charset=utf-8><title>" + title +
+                        " · ITKAM34</title><link rel=stylesheet href=/assets/theme.css></head>"
+                        "<body style='padding:24px'><div class=legal-links><a href='/'>← На главную</a></div>"
+                        "<div class=card>" + "".join(out) + "</div></body></html>")
+
+@public_router.get("/dividends-how", response_class=HTMLResponse)
+def dividends_how(request: Request):
+    return _md_page146("docs/dividends.md", "Как рассчитываются дивиденды")

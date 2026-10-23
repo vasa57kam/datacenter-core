@@ -6,7 +6,29 @@ input{padding:9px;border-radius:8px;border:1px solid #30363d;background:#161b22;
 button{margin-top:12px;padding:10px 22px;border:0;border-radius:8px;background:#238636;color:#fff;cursor:pointer}
 .card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-top:12px}
 .nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.ok{color:#3fb950}.warn{color:#ffa198}small{color:#6e7681}</style><link rel="stylesheet" href="/assets/theme.css"></head>
-<body>
+<body><!--theme146--><style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#21262d;--txt:#e6edf3;--mut:#9da7b3;--grn:#238636;--grn2:#3fb950;--yel:#d29922;--red:#da3633;--rad:12px}
+body{background:var(--bg)!important;color:var(--txt)!important;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif!important;margin:0}
+a{color:#58a6ff}
+table{border-collapse:collapse;width:100%}
+td,th{padding:8px 10px;border-bottom:1px solid var(--line);color:var(--mut);font-size:13px}
+th{color:var(--txt);text-align:left}
+button,input,select,textarea{border-radius:10px;border:1px solid var(--line);background:#0f141b;color:var(--txt);padding:9px 12px;font:inherit}
+button{background:var(--grn);border:0;color:#fff;font-weight:600;cursor:pointer}
+button:hover{filter:brightness(1.12)}
+.card,section{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px;margin:12px 0}
+.invest-ads{border-color:var(--yel);background:linear-gradient(180deg,#161b22,#1a1710)}
+.invest-ads a{color:var(--yel)}
+.legal-links{margin:18px 0;color:var(--mut);font-size:13px}
+.legal-links a{color:var(--mut)}
+.quick-tiles a{margin-right:14px;color:var(--yel);text-decoration:none;font-weight:600}
+
+.card{box-shadow:0 8px 24px #00000066}
+h1{font-size:24px;margin:8px 0}h2{font-size:18px;margin:16px 0 8px}
+a{text-decoration:none}a:hover{text-decoration:underline}
+body{background:#0b0f14!important}
+.topbar146{display:none}
+</style>{% if invest_ads %}<div class="card invest-ads">💸 <b>Инвестируйте в платформу</b> — ежедневные дивиденды с дохода облачных услуг. <a href="/invest">Условия и вход →</a> · <a href="/dividends-how">Как считается</a></div>{% endif %}{% if my_div %}<div class="card">💰 Вы партнёр платформы: доля {{ my_div.share }}% пула · начислено всего {{ (my_div.total/100)|round(2) }} ₽ · последнее начисление {{ (my_div.last/100)|round(2) }} ₽ · <a href="/lk/dividends">Мои дивиденды и вывод</a></div>{% endif %}
 <div class="nav"><a href="/lk/">← Кабинет</a></div>
 <h1>💰 Мои дивиденды</h1>
 {% if msg == "request-ok" %}<p class="ok">✓ Заявка на вывод создана — администратор проведёт выплату</p>{% endif %}
@@ -31,4 +53,4 @@ button{margin-top:12px;padding:10px 22px;border:0;border-radius:8px;background:#
 <table><tr><th>id</th><th>сумма ₽</th><th>статус</th></tr>
 {% for r in payouts %}<tr><td>{{ r.id }}</td><td>{{ (r.amount_minor or 0)/100 }}</td><td>{{ r.status }}</td></tr>{% endfor %}</table></div>
 {% endif %}
-</body></html>
+<div class="legal-links" style="text-align:center;padding:14px"><a href="/legal/offer">Оферта</a> · <a href="/legal/terms">Лицензионное соглашение</a> · <a href="/legal/privacy">Персональные данные</a> · <a href="/dividends-how">Инвесторам: как считаются дивиденды</a></div></body></html>
