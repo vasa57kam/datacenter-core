@@ -1400,6 +1400,7 @@ _PROMO138 = [
     ("auto_approve_max_uses", "Доверительный лимит: использований на кошелёк", "1"),    ("invest_share_price_minor", "Цена 1% доли пула для инвесторов, копеек", "1000000"),
     ("invest_min_minor", "Минимальная сумма инвестиции, копеек", "1000000"),
     ("invest_exit_fee_percent", "Комиссия возврата инвестиции, % (0 — без комиссии)", "0"),
+    ("invest_ads_enabled", "Реклама «Инвестируйте» в кабинете клиентов (1/0)", "1"),
 
 ]
 
@@ -1639,10 +1640,10 @@ def ops_docs_page(request: Request, msg: str = "", db: Session = Depends(get_db)
         raise HTTPException(status_code=403)
     from app.core.settings_svc import get_setting as _g
     docs = {}
-    for key, path in (("offer", "docs/legal/offer_template.md"),
-                      ("terms", "docs/legal/terms.md"),
-                      ("privacy", "docs/legal/privacy.md"),
-                      ("dividends", "docs/dividends.md"),
+    for key, path in (("offer", "app/ui/legaldocs/offer.md"),
+                      ("terms", "app/ui/legaldocs/terms.md"),
+                      ("privacy", "app/ui/legaldocs/privacy.md"),
+                      ("dividends", "app/ui/legaldocs/dividends.md"),
                       ("rules", ""), ("kassa", ""), ("help", "")):
         val = _g(db, "doc_" + key, "") or ""
         if not val and path:

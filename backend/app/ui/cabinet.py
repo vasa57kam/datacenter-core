@@ -212,7 +212,9 @@ def legal_page(name: str, request: Request, db: Session = Depends(get_db)):
     import os as _os
     if name not in ("offer", "terms", "privacy"):
         raise HTTPException(status_code=404)
-    path = _os.path.join("docs", "legal", f"{name}.md")
+    path = {"offer": "app/ui/legaldocs/offer.md",
+            "terms": "app/ui/legaldocs/terms.md",
+            "privacy": "app/ui/legaldocs/privacy.md"}.get(name, "app/ui/legaldocs/offer.md")
     from app.core.settings_svc import get_setting as _gsdoc
     md = _gsdoc(db, "doc_" + name, "") or ""
     if not md:
@@ -242,6 +244,8 @@ def legal_page(name: str, request: Request, db: Session = Depends(get_db)):
 @public_router.get("/invest", response_class=HTMLResponse)
 def invest_page(request: Request, error: str = "", ok: str = "",
                 db: Session = Depends(get_db)):
+    if _session_alive(request):
+        return RedirectResponse("/lk/dividends", status_code=303)
     price = int(_gs144(db, "invest_share_price_minor", "1000000") or 1000000)
     return templates.TemplateResponse(request, "lk/invest.html",
                                       {"error": error, "ok": ok, "share_price": price / 100})
@@ -250,7 +254,7 @@ def invest_page(request: Request, error: str = "", ok: str = "",
 @public_router.post("/invest")
 def invest_login(request: Request, email: str = Form(), password: str = Form(),
                  db: Session = Depends(get_db)):
-    from app.models import PartnerShare
+    from app.services.dividends import PartnerShare
     email = security.normalize_email(email)
     user = db.execute(select(User).where(func.lower(User.email) == email)).scalar_one_or_none()
     if user is None or not security.verify_password(password, user.password_hash) or user.status != "active":
@@ -1145,7 +1149,7 @@ def dividends_how(request: Request, db: Session = Depends(get_db)):
     md = _gsdoc(db, "doc_dividends", "") or ""
     if not md:
         try:
-            md = open("docs/dividends.md").read()
+            md = open("app/ui/legaldocs/dividends.md").read()
         except OSError:
             md = "Документ готовится."
     return _md_page146_text(md, "Как рассчитываются дивиденды")
@@ -1156,7 +1160,7 @@ def invest_register(request: Request, email: str = Form(), password: str = Form(
                     invested: str = Form(""), db: Session = Depends(get_db)):
     import uuid as _uuid
     from app.services import dividends as dv
-    from app.models import PartnerShare
+    from app.services.dividends import PartnerShare
     dv.ensure_tables()
     email = security.normalize_email(email)
     if "@" not in email or len(password) < 8:

@@ -59,7 +59,7 @@ h1{font-size:24px;margin:8px 0}h2{font-size:18px;margin:16px 0 8px}
 a{text-decoration:none}a:hover{text-decoration:underline}
 body{background:#0b0f14!important}
 .topbar146{display:none}
-</style>{% if invest_ads %}<div class="card invest-ads">💸 <b>Инвестируйте в платформу</b> — ежедневные дивиденды с дохода облачных услуг. <a href="/invest">Условия и вход →</a> · <a href="/dividends-how">Как считается</a></div>{% endif %}{% if my_div %}<div class="card">💰 Вы партнёр платформы: доля {{ my_div.share }}% пула · начислено всего {{ (my_div.total/100)|round(2) }} ₽ · последнее начисление {{ (my_div.last/100)|round(2) }} ₽ · <a href="/lk/dividends">Мои дивиденды и вывод</a></div>{% endif %}
+</style>{% if invest_ads %}<div class="card invest-ads">💸 <b>Инвестируйте в платформу</b> — ежедневные дивиденды с дохода облачных услуг. <a href="/lk/dividends">Открыть раздел →</a> · <a href="/dividends-how">Как считается</a></div>{% endif %}{% if my_div %}<div class="card">💰 Вы партнёр платформы: доля {{ my_div.share }}% пула · начислено всего {{ (my_div.total/100)|round(2) }} ₽ · последнее начисление {{ (my_div.last/100)|round(2) }} ₽ · <a href="/lk/dividends">Мои дивиденды и вывод</a></div>{% endif %}
 <nav>
   <a class="home" href="/">ITKAM34</a>
   {% if user %}
