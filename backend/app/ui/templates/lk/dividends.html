@@ -1,56 +1,57 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>Мои дивиденды · ITKAM34</title>
-<style>body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px}
-h1{font-size:20px}table{border-collapse:collapse;margin-top:10px;font-size:13px}td,th{padding:6px 10px;border-bottom:1px solid #21262d;color:#9da7b3}
-input{padding:9px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3;width:320px}
-button{margin-top:12px;padding:10px 22px;border:0;border-radius:8px;background:#238636;color:#fff;cursor:pointer}
-.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-top:12px}
-.nav a{color:#58a6ff;margin-right:14px;text-decoration:none}.ok{color:#3fb950}.warn{color:#ffa198}small{color:#6e7681}</style><link rel="stylesheet" href="/assets/theme.css"></head>
-<body><!--theme146--><style>
-:root{--bg:#0d1117;--panel:#161b22;--line:#21262d;--txt:#e6edf3;--mut:#9da7b3;--grn:#238636;--grn2:#3fb950;--yel:#d29922;--red:#da3633;--rad:12px}
-body{background:var(--bg)!important;color:var(--txt)!important;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif!important;margin:0}
-a{color:#58a6ff}
-table{border-collapse:collapse;width:100%}
-td,th{padding:8px 10px;border-bottom:1px solid var(--line);color:var(--mut);font-size:13px}
-th{color:var(--txt);text-align:left}
-button,input,select,textarea{border-radius:10px;border:1px solid var(--line);background:#0f141b;color:var(--txt);padding:9px 12px;font:inherit}
-button{background:var(--grn);border:0;color:#fff;font-weight:600;cursor:pointer}
-button:hover{filter:brightness(1.12)}
-.card,section{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px;margin:12px 0}
-.invest-ads{border-color:var(--yel);background:linear-gradient(180deg,#161b22,#1a1710)}
-.invest-ads a{color:var(--yel)}
-.legal-links{margin:18px 0;color:var(--mut);font-size:13px}
-.legal-links a{color:var(--mut)}
-.quick-tiles a{margin-right:14px;color:var(--yel);text-decoration:none;font-weight:600}
+<html lang="ru"><head><meta charset="utf-8"><title>Инвестиции и дивиденды · ITKAM34</title></head>
+<body style="padding:16px">
+<div class="legal-links"><a href="/lk/">← Кабинет</a> · <a href="/dividends-how">Как это работает →</a></div>
+<h1>💰 Инвестиции и дивиденды</h1>
+{% if msg == "inv-ok" %}<p style="color:#3fb950">✓ Средства переведены в инвестиции — доля активна с ближайшей ночи</p>{% endif %}
+{% if msg == "inv-min" %}<p style="color:#ffa198">Минимальная сумма входа: {{ min_inv }} ₽</p>{% endif %}
+{% if msg == "inv-balance" %}<p style="color:#ffa198">Недостаточно баланса — сначала пополните</p>{% endif %}
+{% if msg == "red-ok" %}<p style="color:#3fb950">✓ Транш закрыт, сумма возвращена на баланс</p>{% endif %}
+{% if msg == "request-ok" %}<p style="color:#3fb950">✓ Заявка на вывод создана — администратор проведёт выплату</p>{% endif %}
 
-.card{box-shadow:0 8px 24px #00000066}
-h1{font-size:24px;margin:8px 0}h2{font-size:18px;margin:16px 0 8px}
-a{text-decoration:none}a:hover{text-decoration:underline}
-body{background:#0b0f14!important}
-.topbar146{display:none}
-</style>{% if invest_ads %}<div class="card invest-ads">💸 <b>Инвестируйте в платформу</b> — ежедневные дивиденды с дохода облачных услуг. <a href="/invest">Условия и вход →</a> · <a href="/dividends-how">Как считается</a></div>{% endif %}{% if my_div %}<div class="card">💰 Вы партнёр платформы: доля {{ my_div.share }}% пула · начислено всего {{ (my_div.total/100)|round(2) }} ₽ · последнее начисление {{ (my_div.last/100)|round(2) }} ₽ · <a href="/lk/dividends">Мои дивиденды и вывод</a></div>{% endif %}
-<div class="nav"><a href="/lk/">← Кабинет</a></div>
-<h1>💰 Мои дивиденды</h1>
-{% if msg == "request-ok" %}<p class="ok">✓ Заявка на вывод создана — администратор проведёт выплату</p>{% endif %}
-{% if msg == "bad-amount" %}<p class="warn">Проверь сумму: она не должна превышать баланс</p>{% endif %}
-{% if msg == "not-partner" %}<p class="warn">Ты пока не партнёр платформы</p>{% endif %}
-{% if not me %}
-<div class="card"><p>Партнёрская программа: вкладывайся в инфраструктуру платформы и получай долю дохода каждый день.
-Подробности и договор — в «Поддержке».</p></div>
-{% else %}
-<div class="card"><b>Мои доли:</b>
-{% for p in me %}<p>{{ p.title }} — доля пула {{ p.share_percent }}%, вложено {{ (p.invested_minor or 0)/100 }} ₽</p>{% endfor %}</div>
-<div class="card"><h3>Начисления</h3>
-<table><tr><th>дата</th><th>выручка платформы ₽</th><th>мне начислено ₽</th></tr>
-{% for a in accruals %}<tr><td>{{ a.period }}</td><td>{{ (a.revenue_minor or 0)/100 }}</td><td class="ok">{{ (a.amount_minor or 0)/100 }}</td></tr>{% endfor %}</table></div>
-<div class="card"><h3>Вывод в реальные деньги</h3>
-<form method="post" action="/lk/dividends/payout">
-<label>Сумма, ₽: <input name="amount" value="100"></label>
-<label>Реквизиты (карта/счёт): <input name="requisites" placeholder="+7 900 000-00-00"></label>
-<button>Создать заявку на вывод</button>
+<div class="card">
+<h2>Мой инвестиционный портфель</h2>
+{% if tranches %}
+<table><tr><th>№</th><th>вложено ₽</th><th>доля пула</th><th>статус</th><th>действие</th></tr>
+{% for t in tranches %}<tr><td>{{ t.id }}</td><td>{{ (t.invested_minor or 0)/100 }}</td><td>{{ t.share_percent }}%</td><td>{{ t.status }}</td>
+<td>{% if t.status == "active" %}<form style="display:inline" method="post" action="/lk/dividends/redeem"
+onsubmit="return confirm('Вернуть вложенные средства на баланс? Доля перестанет приносить доход.')">
+<input type="hidden" name="tranche" value="{{ t.id }}">
+<button style="background:#21262d">Вернуть</button></form>{% endif %}</td></tr>{% endfor %}</table>
+{% else %}<p>У тебя пока нет инвестиций. Вложи свободный баланс — и получай долю дохода платформы каждый день.</p>{% endif %}
+<p><small>Цена 1% доли пула: <b>{{ price }} ₽</b> · минимум входа: <b>{{ min_inv }} ₽</b> ·
+комиссия возврата: <b>{{ fee }}%</b>. Доход не гарантирован и зависит от фактической выручки.</small></p>
+</div>
+
+<div class="card">
+<h2>Инвестировать с баланса</h2>
+<form method="post" action="/lk/dividends/invest">
+<label>Сумма, ₽ <input name="amount" value="{{ min_inv|int }}" style="width:160px"></label>
+<button>Инвестировать</button>
 </form>
-<p><small>Сумма списывается с баланса сразу при одобрении; перевод на реквизиты администратор выполняет вручную в течение 1 рабочего дня.</small></p>
-<table><tr><th>id</th><th>сумма ₽</th><th>статус</th></tr>
-{% for r in payouts %}<tr><td>{{ r.id }}</td><td>{{ (r.amount_minor or 0)/100 }}</td><td>{{ r.status }}</td></tr>{% endfor %}</table></div>
+<p><small>Сумма списывается с баланса и становится траншем: доля = сумма ÷ цена 1%.
+Дивиденды начисляются ночью на баланс — их можно реинвестировать, тратить на услуги или вывести.</small></p>
+</div>
+
+<div class="card">
+<h2>Начисления дивидендов</h2>
+{% if accruals %}
+<table><tr><th>дата</th><th>выручка платформы ₽</th><th>мне начислено ₽</th></tr>
+{% for a in accruals %}<tr><td>{{ a.period }}</td><td>{{ (a.revenue_minor or 0)/100 }}</td><td style="color:#3fb950">{{ (a.amount_minor or 0)/100 }}</td></tr>{% endfor %}</table>
+{% else %}<p>Начислений пока нет: они появятся после первой ночи с активной долей.</p>{% endif %}
+</div>
+
+<div class="card">
+<h2>Вывод средств</h2>
+<form method="post" action="/lk/dividends/payout">
+<label>Сумма, ₽ <input name="amount" value="100" style="width:160px"></label>
+<label>Реквизиты (карта/счёт) <input name="requisites" placeholder="+7 900 000-00-00" style="width:260px"></label>
+<button style="background:#d29922;color:#111">Создать заявку на вывод</button>
+</form>
+<p><small>Выводится с баланса (дивиденды или возвращённые инвестиции). Перевод выполняет администратор за 1 рабочий день.</small></p>
+{% if payouts %}
+<table><tr><th>№</th><th>сумма ₽</th><th>статус</th></tr>
+{% for r in payouts %}<tr><td>{{ r.id }}</td><td>{{ (r.amount_minor or 0)/100 }}</td><td>{{ r.status }}</td></tr>{% endfor %}</table>
 {% endif %}
-<div class="legal-links" style="text-align:center;padding:14px"><a href="/legal/offer">Оферта</a> · <a href="/legal/terms">Лицензионное соглашение</a> · <a href="/legal/privacy">Персональные данные</a> · <a href="/dividends-how">Инвесторам: как считаются дивиденды</a></div></body></html>
+</div>
+</body></html>

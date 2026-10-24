@@ -15,6 +15,8 @@ REASON_RU = {
     "service_activation_one_time": "Разовая оплата услуги",
     "adjustment": "Корректировка баланса",
     "dividend_accrual": "Начисление дивидендов",
+    "invest_deposit": "Перевод в инвестиции",
+    "invest_withdraw": "Возврат из инвестиций",
     "dividend_payout": "Выплата дивидендов по реквизитам",
     "refund": "Возврат средств",
 }

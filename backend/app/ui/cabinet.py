@@ -1064,9 +1064,16 @@ def my_dividends(request: Request, msg: str = "", db: Session = Depends(get_db))
                               .order_by(dv.DividendAccrual.id.desc()).limit(60)).scalars().all()
         payouts = db.execute(select(dv.PayoutRequest).where(dv.PayoutRequest.partner_id.in_(ids))
                              .order_by(dv.PayoutRequest.id.desc()).limit(20)).scalars().all()
+    _price = int(_gs144(db, "invest_share_price_minor", "1000000") or 1000000)
+    _minv = int(_gs144(db, "invest_min_minor", str(_price)) or _price)
+    _fee = int(_gs144(db, "invest_exit_fee_percent", "0") or 0)
+    _tr = db.execute(select(dv.PartnerShare).where(dv.PartnerShare.user_id == user.id)
+                     .order_by(dv.PartnerShare.id)).scalars().all()
     return templates.TemplateResponse(request, "lk/dividends.html",
                                       {"user": user, "me": me, "accruals": accruals,
-                                       "payouts": payouts, "msg": msg})
+                                       "payouts": payouts, "msg": msg,
+                                       "tranches": _tr, "price": _price / 100,
+                                       "min_inv": _minv / 100, "fee": _fee})
 
 @router.post("/dividends/payout")
 def my_dividend_payout(request: Request, amount: str = Form(""), requisites: str = Form(""),
@@ -1173,3 +1180,58 @@ def invest_register(request: Request, email: str = Form(), password: str = Form(
     db.commit()
     notify_admin(db, f"🧾 Новый инвестор: {email}, взнос {(minor/100):.0f} ₽, доля {share}% — станет активным после оплаты")
     return RedirectResponse("/invest?ok=1", status_code=303)
+
+
+@router.post("/dividends/invest")
+def dividends_invest(request: Request, amount: str = Form(""),
+                     db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    from app.services import dividends as dv
+    dv.ensure_tables()
+    minor = parse_rub(amount)
+    price = int(_gs144(db, "invest_share_price_minor", "1000000") or 1000000)
+    minv = int(_gs144(db, "invest_min_minor", str(price)) or price)
+    if minor < max(price, minv):
+        return RedirectResponse("/lk/dividends?msg=inv-min", status_code=303)
+    wallet = ledger.get_wallet(db, user.id)
+    if (wallet.balance_minor or 0) < minor:
+        return RedirectResponse("/lk/dividends?msg=inv-balance", status_code=303)
+    share = max(1, minor // price)
+    tr = dv.PartnerShare(user_id=user.id, title=user.email, invested_minor=minor,
+                         share_percent=share, status="active")
+    db.add(tr)
+    db.flush()
+    ledger.debit(db, wallet, minor, reason="invest_deposit",
+                 entity_type="partner", entity_id=tr.id,
+                 idempotency_key=f"invest:{tr.id}")
+    db.commit()
+    return RedirectResponse("/lk/dividends?msg=inv-ok", status_code=303)
+
+
+@router.post("/dividends/redeem")
+def dividends_redeem(request: Request, tranche: str = Form(""),
+                     db: Session = Depends(get_db)):
+    user = _current_user(db, request)
+    if user is None:
+        return RedirectResponse("/lk/login", status_code=303)
+    from app.services import dividends as dv
+    dv.ensure_tables()
+    try:
+        tid = int(tranche or 0)
+    except ValueError:
+        tid = 0
+    tr = db.get(dv.PartnerShare, tid)
+    if tr is None or tr.user_id != user.id or tr.status != "active":
+        return RedirectResponse("/lk/dividends?msg=red-bad", status_code=303)
+    fee = int(_gs144(db, "invest_exit_fee_percent", "0") or 0)
+    gross = tr.invested_minor or 0
+    net = gross - gross * fee // 100
+    tr.status = "closed"
+    wallet = ledger.get_wallet(db, user.id)
+    ledger.credit(db, wallet, net, reason="invest_withdraw",
+                  entity_type="partner", entity_id=tr.id,
+                  idempotency_key=f"redeem:{tr.id}")
+    db.commit()
+    return RedirectResponse("/lk/dividends?msg=red-ok", status_code=303)
